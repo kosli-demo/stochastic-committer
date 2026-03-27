@@ -59,7 +59,7 @@ jobs:
           echo 1111
           cd spreader.git
           echo 2222
-          git remote set-url origin https://github.com/kosli-demo/${{matrix.repo_name}}.git
+          git remote set-url origin https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/${{matrix.repo_name}}.git 
           echo 3333
           git push --mirror
 
