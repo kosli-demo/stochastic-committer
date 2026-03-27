@@ -1,0 +1,9 @@
+
+secrets.CLONE_PUSH_REPOS
+
+This has to be set from a Classic Personal Access Token (not fine-grained)
+with the following permissions:
+
+repo:
+workflow:
+admin:org 
