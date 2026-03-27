@@ -1,8 +1,11 @@
 name: Main
 
 on:
-  schedule: 
-    - cron: '* * * * *' # Max, every 5 minutes
+  push:
+    branches:
+      - main
+  #schedule: 
+  #  - cron: '* * * * *' # Max, every 5 minutes
 
 env:
   #KOSLI_API_TOKEN: ${{ secrets.KOSLI_API_TOKEN }}
