@@ -1,0 +1,30 @@
+name: Main
+
+on:
+  push:
+    branches:
+      - main
+  #schedule: 
+  #  - cron: '* * * * *' # Max, every 5 minutes
+
+env:
+  #KOSLI_API_TOKEN: ${{ secrets.KOSLI_API_TOKEN }}
+  KOSLI_DEBUG:     false
+  KOSLI_DRY_RUN:   false
+  KOSLI_HOST:      https://app.kosli.com
+  KOSLI_ORG:       kosli-demo
+  REPO_NAME:       ${{ github.event.repository.name }}
+jobs:
+  setup:
+    needs: []
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if we are in base workflow
+        run: |
+          echo "${REPO_NAME}"
+          if [ "${REPO_NAME}" == 'base' ]; then
+            echo In base
+          else
+            echo Not in base
+          fi
+
