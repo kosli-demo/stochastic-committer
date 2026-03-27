@@ -55,7 +55,7 @@ jobs:
         run: |
           gh repo create kosli-demo/${{matrix.repo_name}} --public || true
           echo 0000
-          git clone --mirror https://github.com/kosli-demo/spreader.git
+          git clone --mirror https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/spreader.git 
           echo 1111
           cd spreader.git
           echo 2222
