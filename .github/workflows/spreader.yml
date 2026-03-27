@@ -50,6 +50,8 @@ jobs:
           echo "${{matrix.repo_name}}"
 
       - name: Clone
+        env:
+          GH_TOKEN: ${{secrets.CLONE_PUSH_REPOS}}
         run: |
           git clone --bare https://github.com/kosli-demo/spreader.git
           cd spreader.git
