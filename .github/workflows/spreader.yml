@@ -8,12 +8,8 @@ on:
   #  - cron: '* * * * *' # Max, every 5 minutes
 
 env:
-  #KOSLI_API_TOKEN: ${{ secrets.KOSLI_API_TOKEN }}
-  KOSLI_DEBUG:     false
-  KOSLI_DRY_RUN:   false
-  KOSLI_HOST:      https://staging.app.kosli.com
-  KOSLI_ORG:       kosli-demo
   REPO_NAME:       ${{ github.event.repository.name }}
+
 jobs:
   set-repo-names:
     needs: []

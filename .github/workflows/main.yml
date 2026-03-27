@@ -8,12 +8,14 @@ on:
   #  - cron: '* * * * *' # Max, every 5 minutes
 
 env:
-  #KOSLI_API_TOKEN: ${{ secrets.KOSLI_API_TOKEN }}
+  KOSLI_API_TOKEN: ${{ secrets.KOSLI_API_TOKEN }}
   KOSLI_DEBUG:     false
   KOSLI_DRY_RUN:   false
   KOSLI_HOST:      https://staging.app.kosli.com
   KOSLI_ORG:       kosli-demo
-  REPO_NAME:       ${{ github.event.repository.name }}
+  KOSLI_FLOW:      ${{ github.event.repository.name }}-ci
+  KOSLI_TRAIL:     ${{ github.sha}}
+
 jobs:
   setup:
     needs: []
@@ -22,8 +24,27 @@ jobs:
     outputs:
       repo_names: ${{ steps.set-repo-names.outputs.repo_names }}
     steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@v6
 
-      - name: Print repo name
+      - name: Setup Kosli CLI
+        uses: kosli-dev/setup-cli-action@v2
+        with:
+          version: ${{ vars.KOSLI_CLI_VERSION }}
+
+      - name: Create Kosli Flow
         run:
-          echo "${REPO_NAME}"
+          kosli create flow "${KOSLI_FLOW}"
+
+      - name: Begin Kosli Trail
+        run:
+          kosli begin trail "${KOSLI_TRAIL}"
+
+      - name: Write Trail URL to GitHub Step Summary
+        run: |
+          url="${KOSLI_HOST}/${KOSLI_ORG}/flows/${KOSLI_FLOW}/trails/${KOSLI_TRAIL}"
+          echo "[Kosli Trail](${url})" > "${GITHUB_STEP_SUMMARY}"
