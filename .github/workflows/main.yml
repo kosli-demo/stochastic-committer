@@ -11,21 +11,39 @@ env:
   #KOSLI_API_TOKEN: ${{ secrets.KOSLI_API_TOKEN }}
   KOSLI_DEBUG:     false
   KOSLI_DRY_RUN:   false
-  KOSLI_HOST:      https://app.kosli.com
+  KOSLI_HOST:      https://staging.app.kosli.com
   KOSLI_ORG:       kosli-demo
   REPO_NAME:       ${{ github.event.repository.name }}
 jobs:
-  setup:
+  set-repo-names:
     needs: []
     runs-on: ubuntu-latest
+    outputs:
+      repo_names: ${{ steps.set-repo-names.outputs.repo_names }}
     steps:
-      - name: Check if we are in base workflow
-        run: |
-          gh --help
-          echo "${REPO_NAME}"
-          if [ "${REPO_NAME}" == 'base' ]; then
-            echo In base
-          else
-            echo Not in base
-          fi
+      - uses: actions/checkout@v6
 
+      - name: Set repo names
+        id: set-repo-names
+        env:
+          REPOS_FILENAME: repos.json
+        run: |
+          cat data/repo-names.json | ./bin/matrix_repo_names_json.py > "${REPOS_FILENAME}"
+          repo_names="$(jq --compact-output . ${REPOS_FILENAME})"
+          jq . <<< "${repo_names}"
+          echo "repo_names=${repo_names}" >> ${GITHUB_OUTPUT}
+
+
+  repo-names:
+    needs: [set-repo-names]
+    if: ${{ needs.set-repo-names.outputs.repo_names != '[]' }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include: ${{ fromJSON(needs.set-repo-names.outputs.repo_names) }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - names: Show matrix
+        run:
+          echo "${{matrix.repo_name}}"
