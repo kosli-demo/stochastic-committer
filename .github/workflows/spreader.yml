@@ -51,7 +51,7 @@ jobs:
 
       - name: Clone
         env:
-          GH_TOKEN: ${{secrets.CLONE_PUSH_REPOS}}
+          GH_TOKEN: ${{ github.token }}
         run: |
           gh repo create ${{matrix.repo_name}} --public || true
           echo 0000
