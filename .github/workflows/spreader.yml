@@ -53,7 +53,7 @@ jobs:
         env:
           GH_TOKEN: ${{secrets.CLONE_PUSH_REPOS}}
         run: |
-          gh repo create ${{matrix.repo_name}} --public || true
+          gh repo create kosli-demo/${{matrix.repo_name}} --public || true
           echo 0000
           git clone --mirror https://github.com/kosli-demo/spreader.git
           echo 1111
@@ -62,4 +62,5 @@ jobs:
           git remote set-url origin https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/${{matrix.repo_name}}.git 
           echo 3333
           git push --mirror
+          echo 4444
 
