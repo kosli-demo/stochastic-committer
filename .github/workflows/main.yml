@@ -21,6 +21,7 @@ jobs:
     steps:
       - name: Check if we are in base workflow
         run: |
+          gh --help
           echo "${REPO_NAME}"
           if [ "${REPO_NAME}" == 'base' ]; then
             echo In base
