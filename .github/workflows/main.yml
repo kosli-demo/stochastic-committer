@@ -44,6 +44,6 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - names: Show matrix
+      - name: Show matrix
         run:
           echo "${{matrix.repo_name}}"
