@@ -1,11 +1,8 @@
 name: Main
 
 on:
-  push:
-    branches:
-      - main
-  #schedule: 
-  #  - cron: '* * * * *' # Max, every 5 minutes
+  schedule: 
+    - cron: '* * * * *' # Max, every 5 minutes
 
 env:
   #KOSLI_API_TOKEN: ${{ secrets.KOSLI_API_TOKEN }}
@@ -15,35 +12,15 @@ env:
   KOSLI_ORG:       kosli-demo
   REPO_NAME:       ${{ github.event.repository.name }}
 jobs:
-  set-repo-names:
+  setup:
     needs: []
+    if: ${{ github.event.repository.name != 'spreader' }}
     runs-on: ubuntu-latest
     outputs:
       repo_names: ${{ steps.set-repo-names.outputs.repo_names }}
     steps:
       - uses: actions/checkout@v6
 
-      - name: Set repo names
-        id: set-repo-names
-        env:
-          REPOS_FILENAME: repos.json
-        run: |
-          cat data/repo-names.json | ./bin/matrix_repo_names_json.py > "${REPOS_FILENAME}"
-          repo_names="$(jq --compact-output . ${REPOS_FILENAME})"
-          jq . <<< "${repo_names}"
-          echo "repo_names=${repo_names}" >> ${GITHUB_OUTPUT}
-
-
-  repo-names:
-    needs: [set-repo-names]
-    if: ${{ needs.set-repo-names.outputs.repo_names != '[]' }}
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include: ${{ fromJSON(needs.set-repo-names.outputs.repo_names) }}
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Show matrix
+      - name: Print repo name
         run:
-          echo "${{matrix.repo_name}}"
+          echo "${REPO_NAME}"
