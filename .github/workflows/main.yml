@@ -62,7 +62,7 @@ jobs:
     needs: [setup]
     runs-on: ubuntu-latest
     env:
-      REPO_JSON: ${{ toJSON(needs.setup.outputs.repo_json) }}
+      REPO_JSON: ${{ fromJSON(needs.setup.outputs.repo_json) }}
     steps:
       # - name: Harden Runner
       #   uses: step-security/harden-runner@v2
@@ -74,6 +74,7 @@ jobs:
       - name: Print repo json
         run: |
           echo "${REPO_JSON}" > repo.json
+          cat repo.json
           jq . repo.json
 
       # - name: Build docker image
