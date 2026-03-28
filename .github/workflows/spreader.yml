@@ -54,4 +54,3 @@ jobs:
           cd spreader.git
           git remote set-url origin https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/${REPO_NAME}.git
           git push --mirror
-
