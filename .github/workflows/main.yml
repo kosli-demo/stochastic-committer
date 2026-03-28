@@ -36,7 +36,7 @@ jobs:
         run:
           REPO="${{ github.event.repository.name }}"
           FILTER=".[] | select(.repo_name == \"${REPO}\")"
-          REPO_JSON="$(jq --compact-output "${FILTER}" data/all_repos.json)"
+          REPO_JSON="$(jq --compact-output "${FILTER}" data/all-repos.json)"
           echo "repo_json=${REPO_JSON}" >> ${GITHUB_OUTPUT}
 
       - name: Setup Kosli CLI
@@ -74,7 +74,7 @@ jobs:
       - name: Print repo json
         run:
           jq . <<< "${REPO_JSON}"
-          
+
       # - name: Build docker image
       #   run:
       #     make image
