@@ -1,6 +1,6 @@
 
 The core job in .github/workflows/main.yml
-makes a copy of the spreader repo into N other repos.
+makes a copy of the base repo into N other repos.
 Currently N is set to 2 in the line:
 
 ```shell
