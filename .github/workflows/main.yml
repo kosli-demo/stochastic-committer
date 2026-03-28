@@ -76,6 +76,7 @@ jobs:
           echo "${REPO_JSON}" > repo.json
           cat repo.json
           jq . repo.json
+          jq .repo_name repo.json
 
       # - name: Build docker image
       #   run:
