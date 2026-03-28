@@ -22,7 +22,7 @@ jobs:
     if: ${{ github.event.repository.name != 'spreader' }}
     runs-on: ubuntu-latest
     outputs:
-      repo_names: ${{ steps.set-repo-names.outputs.repo_names }}
+      repo_names: ${{ steps.set-repo-json.outputs.repo_json }}
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@v2
@@ -30,6 +30,14 @@ jobs:
           egress-policy: audit
 
       - uses: actions/checkout@v6
+
+      - name: Setup repo json
+        id: setup-repo-json
+        run:
+          REPO="${{ github.event.repository.name }}"
+          FILTER=".[] | select(.repo_name == \"${REPO}\")"
+          REPO_JSON="$(jq --compact-output "${FILTER}" data/all_repos.json)"
+          echo "repo_json=${REPO_JSON}" >> ${GITHUB_OUTPUT}
 
       - name: Setup Kosli CLI
         uses: kosli-dev/setup-cli-action@v2
@@ -48,3 +56,34 @@ jobs:
         run: |
           url="${KOSLI_HOST}/${KOSLI_ORG}/flows/${KOSLI_FLOW}/trails/${KOSLI_TRAIL}"
           echo "[Kosli Trail](${url})" > "${GITHUB_STEP_SUMMARY}"
+
+
+  build:
+    needs: [setup]
+    runs-on: ubuntu-latest
+    env:
+      REPO_JSON: ${{ toJSON(needs.setup.outputs.repo_json) }}
+    steps:
+      # - name: Harden Runner
+      #   uses: step-security/harden-runner@v2
+      #   with:
+      #     egress-policy: audit
+
+      - uses: actions/checkout@v6
+
+      - name: Print repo json
+        run:
+          jq . <<< "${REPO_JSON}"
+          
+      # - name: Build docker image
+      #   run:
+      #     make image
+
+      # - name: Setup Kosli CLI
+      #   uses: kosli-dev/setup-cli-action@v2
+      #   with:
+      #     version: ${{ vars.KOSLI_CLI_VERSION }}
+
+      # - name: Attest docker image
+      #   run:
+      #     kosli attest artifact 

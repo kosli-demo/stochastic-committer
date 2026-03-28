@@ -1,7 +1,6 @@
-# spreader
 
-Spiking an idea for a stochastic process to simulate a large organization, so we get
+This repo was created and is updated stochastically by 
+[spreader]() whose aim is to simulate a large Kosli organization, to get:
 - a large data set
 - a large demo
 
-Idea is that this repo `spreader` will spread copies of itself.

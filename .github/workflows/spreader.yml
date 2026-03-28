@@ -25,10 +25,10 @@ jobs:
         env:
           REPOS_FILENAME: repos.json
         run: |
-          cat data/repo-names.json | ./bin/matrix_repo_names_json.py > "${REPOS_FILENAME}"
-          repo_names="$(jq --compact-output . ${REPOS_FILENAME})"
+          jq '.[:2]' data/all-repos.json > "${REPOS_FILENAME}"
+          REPO_NAMES="$(jq --compact-output . ${REPOS_FILENAME})"
           jq . <<< "${repo_names}"
-          echo "repo_names=${repo_names}" >> ${GITHUB_OUTPUT}
+          echo "repo_names=${REPO_NAMES}" >> ${GITHUB_OUTPUT}
 
 
   repo-names:
@@ -38,21 +38,23 @@ jobs:
     strategy:
       matrix:
         include: ${{ fromJSON(needs.set-repo-names.outputs.repo_names) }}
+    env:
+      REPO_JSON: ${{ toJSON(matrix) }}
     steps:
       - uses: actions/checkout@v6
 
       - name: Show matrix
         run:
-          echo "${{matrix.repo_name}}"
+          jq . <<< "${REPO_JSON}"
 
-      - name: Clone
-        env:
-          GH_TOKEN: ${{ secrets.CLONE_PUSH_REPOS }}
-          REPO_NAME: ${{ matrix.repo_name }}
-        run: |
-          gh repo create kosli-demo/${REPO_NAME} --public || true
-          git clone --mirror https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/spreader.git 
-          cd spreader.git
-          git remote set-url origin https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/${REPO_NAME}.git 
-          git push --mirror
+      # - name: Clone
+      #   env:
+      #     GH_TOKEN: ${{ secrets.CLONE_PUSH_REPOS }}
+      #     REPO_NAME: ${{ matrix.repo_name }}
+      #   run: |
+      #     gh repo create kosli-demo/${REPO_NAME} --public || true
+      #     git clone --mirror https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/spreader.git 
+      #     cd spreader.git
+      #     git remote set-url origin https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/${REPO_NAME}.git 
+      #     git push --mirror
 
