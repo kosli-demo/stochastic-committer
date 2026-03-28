@@ -35,8 +35,10 @@ jobs:
         id: setup-repo-json
         run:
           REPO="${{ github.event.repository.name }}"
+          echo "REPO=:${REPO}:"
           FILTER=".[] | select(.repo_name == \"${REPO}\")"
           REPO_JSON="$(jq --compact-output "${FILTER}" data/all-repos.json)"
+          echo ":${REPO_JSON}:"
           echo "repo_json=${REPO_JSON}" >> ${GITHUB_OUTPUT}
 
       - name: Setup Kosli CLI
