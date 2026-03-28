@@ -7,9 +7,6 @@ on:
   #schedule: 
   #  - cron: '* * * * *' # Max, every 5 minutes
 
-env:
-  REPO_NAME:       ${{ github.event.repository.name }}
-
 jobs:
   set-repo-names:
     needs: []
@@ -47,14 +44,14 @@ jobs:
         run:
           jq . <<< "${REPO_JSON}"
 
-      # - name: Clone
-      #   env:
-      #     GH_TOKEN: ${{ secrets.CLONE_PUSH_REPOS }}
-      #     REPO_NAME: ${{ matrix.repo_name }}
-      #   run: |
-      #     gh repo create kosli-demo/${REPO_NAME} --public || true
-      #     git clone --mirror https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/spreader.git 
-      #     cd spreader.git
-      #     git remote set-url origin https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/${REPO_NAME}.git 
-      #     git push --mirror
+      - name: Clone
+        env:
+          GH_TOKEN: ${{ secrets.CLONE_PUSH_REPOS }}
+          REPO_NAME: ${{ matrix.repo_name }}
+        run: |
+          gh repo create kosli-demo/${REPO_NAME} --public || true
+          git clone --mirror https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/spreader.git
+          cd spreader.git
+          git remote set-url origin https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/${REPO_NAME}.git
+          git push --mirror
 
