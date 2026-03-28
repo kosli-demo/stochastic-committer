@@ -31,7 +31,7 @@ jobs:
 
       - uses: actions/checkout@v6
 
-      - name: Setup repo json
+      - name: Setup this repos json
         id: setup-repo-json
         run: |
           REPO="${{ github.event.repository.name }}"
@@ -72,11 +72,8 @@ jobs:
       # - uses: actions/checkout@v6
 
       - name: Print repo json
-        run: |
-          echo "${REPO_JSON}" > repo.json
-          cat repo.json
-          jq . repo.json
-          jq .repo_name repo.json
+        run:
+          jq . <<< "${REPO_JSON}"
 
       # - name: Build docker image
       #   run:

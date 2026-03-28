@@ -48,5 +48,8 @@ jobs:
           gh repo create kosli-demo/${REPO_NAME} --public || true
           git clone --mirror https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/spreader.git
           cd spreader.git
+          echo "XXX" > x.txt
+          git add .
+          git commit -m "Testing"
           git remote set-url origin https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/${REPO_NAME}.git
-          git push --mirror
+          #git push --mirror
