@@ -62,7 +62,7 @@ jobs:
     needs: [setup]
     runs-on: ubuntu-latest
     env:
-      REPO_JSON: ${{ toJSON(needs.setup.outputs.repo_json) }}
+      REPO_JSON: ${{ needs.setup.outputs.repo_json }}
     steps:
       # - name: Harden Runner
       #   uses: step-security/harden-runner@v2
