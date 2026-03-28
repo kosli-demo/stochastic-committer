@@ -7,83 +7,45 @@ on:
   #schedule: 
   #  - cron: '* * * * *' # Max, every 5 minutes
 
-env:
-  KOSLI_API_TOKEN: ${{ secrets.KOSLI_API_TOKEN }}
-  KOSLI_DEBUG:     false
-  KOSLI_DRY_RUN:   false
-  KOSLI_HOST:      https://staging.app.kosli.com
-  KOSLI_ORG:       kosli-demo
-  KOSLI_FLOW:      ${{ github.event.repository.name }}-ci
-  KOSLI_TRAIL:     ${{ github.sha}}
-
 jobs:
-  setup:
+  set-repo-names:
     needs: []
-    if: ${{ github.event.repository.name != 'spreader' }}
     runs-on: ubuntu-latest
     outputs:
-      repo_json: ${{ steps.setup-repo-json.outputs.repo_json }}
+      repo_names: ${{ steps.set-repo-names.outputs.repo_names }}
     steps:
-      - name: Harden Runner
-        uses: step-security/harden-runner@v2
-        with:
-          egress-policy: audit
-
       - uses: actions/checkout@v6
 
-      - name: Setup this repos json
-        id: setup-repo-json
+      - name: Set repo names
+        id: set-repo-names
+        env:
+          REPOS_FILENAME: repos.json
         run: |
-          REPO="${{ github.event.repository.name }}"
-          FILTER=".[] | select(.repo_name == \"${REPO}\")"
-          REPO_JSON="$(jq --compact-output "${FILTER}" data/all-repos.json)"
-          echo "repo_json=${REPO_JSON}" >> ${GITHUB_OUTPUT}
-
-      - name: Setup Kosli CLI
-        uses: kosli-dev/setup-cli-action@v2
-        with:
-          version: ${{ vars.KOSLI_CLI_VERSION }}
-
-      - name: Create Kosli Flow
-        run:
-          kosli create flow "${KOSLI_FLOW}"
-
-      - name: Begin Kosli Trail
-        run:
-          kosli begin trail "${KOSLI_TRAIL}"
-
-      - name: Write Trail URL to GitHub Step Summary
-        run: |
-          url="${KOSLI_HOST}/${KOSLI_ORG}/flows/${KOSLI_FLOW}/trails/${KOSLI_TRAIL}"
-          echo "[Kosli Trail](${url})" > "${GITHUB_STEP_SUMMARY}"
+          URL=https://raw.githubusercontent.com/kosli-demo/base/refs/heads/main/data/all-repos.json
+          curl --fail --output all-repos.json --silent "${URL}"
+          jq '.[:2]' all-repos.json > "${REPOS_FILENAME}"
+          REPO_NAMES="$(jq --compact-output . ${REPOS_FILENAME})"
+          jq . <<< "${repo_names}"
+          echo "repo_names=${REPO_NAMES}" >> ${GITHUB_OUTPUT}
 
 
-  build:
-    needs: [setup]
+  repo-names:
+    needs: [set-repo-names]
+    if: ${{ needs.set-repo-names.outputs.repo_names != '[]' }}
     runs-on: ubuntu-latest
-    env:
-      REPO_JSON: ${{ needs.setup.outputs.repo_json }}
+    strategy:
+      matrix:
+        include: ${{ fromJSON(needs.set-repo-names.outputs.repo_names) }}
     steps:
-      # - name: Harden Runner
-      #   uses: step-security/harden-runner@v2
-      #   with:
-      #     egress-policy: audit
+      - uses: actions/checkout@v6
 
-      # - uses: actions/checkout@v6
-
-      - name: Print repo json
-        run:
-          jq . <<< "${REPO_JSON}"
-
-      # - name: Build docker image
-      #   run:
-      #     make image
-
-      # - name: Setup Kosli CLI
-      #   uses: kosli-dev/setup-cli-action@v2
-      #   with:
-      #     version: ${{ vars.KOSLI_CLI_VERSION }}
-
-      # - name: Attest docker image
-      #   run:
-      #     kosli attest artifact 
+      - name: Clone
+        env:
+          GH_TOKEN: ${{ secrets.CLONE_PUSH_REPOS }}
+          REPO_NAME: ${{ matrix.repo_name }}
+        run: |
+          gh repo create kosli-demo/${REPO_NAME} --public || true
+          git clone --mirror https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/base.git
+          cd base.git
+          git remote set-url origin https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/${REPO_NAME}.git
+          git push --mirror
