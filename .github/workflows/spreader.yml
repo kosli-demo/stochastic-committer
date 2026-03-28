@@ -40,10 +40,6 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Show matrix
-        run:
-          jq . <<< "${REPO_JSON}"
-
       - name: Clone
         env:
           GH_TOKEN: ${{ secrets.CLONE_PUSH_REPOS }}
