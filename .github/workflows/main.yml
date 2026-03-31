@@ -62,11 +62,12 @@ jobs:
           repository: kosli-demo/${{ matrix.repo_name }}
           token: ${{ secrets.CLONE_PUSH_REPOS }}
           fetch-depth: 0
+          ref: 'main'
 
       - name: Make a change
         run: |
           # Force checkout to get most recent commits
-          git pull origin main
+          # git pull origin main
           git status
           pwd
           ls -al
