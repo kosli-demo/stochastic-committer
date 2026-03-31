@@ -30,6 +30,10 @@ jobs:
           git remote set-url origin https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/${REPO_NAME}.git
           git push --mirror
 
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
       - uses: ./.github/workflows/repo_change.yml
         with:
           repo_name: ${{ inputs.repo_name }}
@@ -39,6 +43,10 @@ jobs:
     if: ${{ inputs.repo_exists == 'true' }}
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
       - uses: ./.github/workflows/repo_change.yml
         with:
           repo_name: ${{ inputs.repo_name }}
