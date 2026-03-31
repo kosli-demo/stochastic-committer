@@ -65,15 +65,14 @@ jobs:
 
       - name: Make a change
         run: |
+          git status
           pwd
           ls -al
-          ls -al .github 
-          ls -al .github/workflows 
-          git status
+          ls -al docs 
           DATE_TIME="$(date +%Y-%m-%dT%H.%M.%S)"
-          cat ./github/workflows/force-ci-run
-          echo "${DATE_TIME}" >> ./github/workflows/force-ci-run
-          cat ./github/workflows/force-ci-run
+          cat docs/force-ci-run
+          echo "${DATE_TIME}" >> docs/force-ci-run
+          cat docs/force-ci-run
           #echo "${DATE_TIME}"
 
       # - name: Commit and push
