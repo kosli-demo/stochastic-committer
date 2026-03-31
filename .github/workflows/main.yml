@@ -8,11 +8,11 @@ on:
   #  - cron: '* * * * *' # Max, every 5 minutes
 
 jobs:
-  set-repo-names:
+  set-some-repos:
     needs: []
     runs-on: ubuntu-latest
     outputs:
-      repo_names: ${{ steps.set-repo-names.outputs.repo_names }}
+      repos: ${{ steps.set-repos.outputs.repos }}
     steps:
       - uses: actions/checkout@v6
 
@@ -22,59 +22,22 @@ jobs:
           REPOS_FILENAME: repos.json
         run: |
           URL=https://raw.githubusercontent.com/kosli-demo/base/refs/heads/main/data/all-repos.json
-          curl --fail --output all-repos.json --silent "${URL}"
-          jq '.[:2]' all-repos.json > "${REPOS_FILENAME}"
-          REPO_NAMES="$(jq --compact-output . ${REPOS_FILENAME})"
-          jq . <<< "${repo_names}"
-          echo "repo_names=${REPO_NAMES}" >> ${GITHUB_OUTPUT}
+          curl --fail --output temp.json --silent "${URL}"
+          ./bin/add-repo-exists.py 3 temp.json > "${REPOS_FILENAME}"
+          REPOS="$(jq --compact-output . ${REPOS_FILENAME})"
+          echo "repos=${REPOS}" >> ${GITHUB_OUTPUT}
 
 
   repo-names:
-    needs: [set-repo-names]
+    needs: [set-some-repos]
     if: ${{ needs.set-repo-names.outputs.repo_names != '[]' }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
         include: ${{ fromJSON(needs.set-repo-names.outputs.repo_names) }}
-    env:
-      REPO_NAME: ${{ matrix.repo_name }}
-    steps:
-#      - uses: actions/checkout@v6
-
-      # - name: Clone
-      #   env:
-      #     GH_TOKEN: ${{ secrets.CLONE_PUSH_REPOS }}
-      #   run: |
-      #     gh repo create kosli-demo/${REPO_NAME} --public || true
-      #     git clone --mirror https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/base.git
-      #     cd base.git
-      #     git remote set-url origin https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/${REPO_NAME}.git
-      #     git push --mirror
-
-      - name: Ensure target repo exists
-        env:
-          GH_TOKEN: ${{ secrets.CLONE_PUSH_REPOS }}
-        run:
-          gh repo create kosli-demo/${REPO_NAME} --public || true
-
-      - uses: actions/checkout@v6
-        with:
-          repository: kosli-demo/${{ matrix.repo_name }}
-          token: ${{ secrets.CLONE_PUSH_REPOS }}
-          fetch-depth: 0
-          ref: 'main'
-
-      - name: Make a change
-        run: |
-          DATE_TIME="$(date +%Y-%m-%dT%H.%M.%S)"
-          echo "${DATE_TIME}" >> .github/workflows/force-ci-run
-
-      - name: Commit and push
-        env:
-          GH_TOKEN: ${{ secrets.CLONE_PUSH_REPOS }}
-        run: |
-          git config --global user.name "${{ github.actor }}"
-          git config --global user.email "${{ github.event.sender.login }}@users.noreply.github.com"
-          git add .
-          git commit --message "Testing spreader"
-          git push
+    uses: ./.github/workflows/repo_existence.yml
+    with:
+      repo_name:   ${{ matrix.repo_name }}
+      repo_exists: ${{ matrix.repo_exists }}
+    secrets:
+      clone_push_repos: ${{ secrets.CLONE_PUSH_REPOS }}
