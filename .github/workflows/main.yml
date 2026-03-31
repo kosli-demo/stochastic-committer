@@ -65,6 +65,8 @@ jobs:
 
       - name: Make a change
         run: |
+          # Force checkout to get most recent commits
+          git pull origin main
           git status
           pwd
           ls -al
