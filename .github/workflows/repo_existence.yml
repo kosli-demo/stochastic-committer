@@ -11,9 +11,6 @@ on:
         description: "Whether repo already exists or not"
         required: true
         type: string
-    secrets:
-      clone_push_repos:
-        required: true
 
 env:
   REPO_NAME: ${{ inputs.repo_name }}
@@ -25,7 +22,7 @@ jobs:
     steps:
       - name: Clone Repo
         env:
-          GH_TOKEN: ${{ secrets.clone_push_repos }}
+          GH_TOKEN: ${{ secrets.CLONE_PUSH_REPOS }}
         run: |
           gh repo create kosli-demo/${REPO_NAME} --public || true
           git clone --mirror https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/base.git
@@ -36,8 +33,6 @@ jobs:
       - uses: ./.github/workflows/repo_change.yml
         with:
           repo_name: ${{ inputs.repo_name }}
-        secrets:
-          clone_push_repos: ${{ secrets.clone_push_repos }}
 
 
   repo-exists:
@@ -47,5 +42,3 @@ jobs:
       - uses: ./.github/workflows/repo_change.yml
         with:
           repo_name: ${{ inputs.repo_name }}
-        secrets:
-          clone_push_repos: ${{ secrets.clone_push_repos }}

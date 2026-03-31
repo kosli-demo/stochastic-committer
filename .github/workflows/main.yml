@@ -39,5 +39,3 @@ jobs:
     with:
       repo_name:   ${{ matrix.repo_name }}
       repo_exists: ${{ matrix.repo_exists }}
-    secrets:
-      clone_push_repos: ${{ secrets.CLONE_PUSH_REPOS }}

@@ -7,9 +7,6 @@ on:
         description: "Name of repository in kosli_demo Org"
         required: true
         type: string
-    secrets:
-      clone_push_repos:
-        required: true
 
 env:
   REPO_NAME: ${{ inputs.repo_name }}
@@ -21,7 +18,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           repository: kosli-demo/${{ inputs.repo_name }}
-          token: ${{ secrets.clone_push_repos }}
+          token: ${{ secrets.CLONE_PUSH_REPOS }}
           fetch-depth: 0
           ref: 'main'
 
@@ -32,7 +29,7 @@ jobs:
 
       # - name: Commit and push
       #   env:
-      #     GH_TOKEN: ${{ secrets.clone_push_repos }}
+      #     GH_TOKEN: ${{ secrets.CLONE_PUSH_REPOS }}
       #   run: |
       #     git config --global user.name "${{ github.actor }}"
       #     git config --global user.email "${{ github.event.sender.login }}@users.noreply.github.com"
