@@ -67,17 +67,19 @@ jobs:
         run: |
           pwd
           ls -al
-          cd "${REPO_NAME}"
+          git status
+          #cd "${REPO_NAME}"
           DATE_TIME="$(date +%Y-%m-%dT%H.%M.%S)"
-          echo "${DATE_TIME}" >> ./github/workflows/force-ci-run
+          #echo "${DATE_TIME}" >> ./github/workflows/force-ci-run
+          echo "${DATE_TIME}"
 
-      - name: Commit and push
-        env:
-          GH_TOKEN: ${{ secrets.CLONE_PUSH_REPOS }}
-        run: |
-          cd "${REPO_NAME}"
-          git config --global user.name "${{ github.actor }}"
-          git config --global user.email "${{ github.event.sender.login }}@users.noreply.github.com"
-          git add .
-          git commit --message "Testing spreader"
-          git push
+      # - name: Commit and push
+      #   env:
+      #     GH_TOKEN: ${{ secrets.CLONE_PUSH_REPOS }}
+      #   run: |
+      #     cd "${REPO_NAME}"
+      #     git config --global user.name "${{ github.actor }}"
+      #     git config --global user.email "${{ github.event.sender.login }}@users.noreply.github.com"
+      #     git add .
+      #     git commit --message "Testing spreader"
+      #     git push
