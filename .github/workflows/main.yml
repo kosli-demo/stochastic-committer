@@ -31,7 +31,6 @@ jobs:
   repo-names:
     needs: [set-some-repos]
     if: ${{ needs.set-some-repos.outputs.repos != '[]' }}
-    runs-on: ubuntu-latest
     strategy:
       matrix:
         include: ${{ fromJSON(needs.set-some-repos.outputs.repos) }}
