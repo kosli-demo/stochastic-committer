@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Set repo names
-        id: set-repo-names
+        id: set-repos
         env:
           REPOS_FILENAME: repos.json
         run: |
