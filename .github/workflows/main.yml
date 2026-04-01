@@ -23,7 +23,7 @@ jobs:
         run: |
           URL=https://raw.githubusercontent.com/kosli-demo/base/refs/heads/main/data/all-repos.json
           curl --fail --output temp.json --silent "${URL}"
-          ./bin/add-repo-exists.py 3 temp.json > "${REPOS_FILENAME}"
+          ./bin/print_repos.py temp.json 3 100 > "${REPOS_FILENAME}"
           REPOS="$(jq --compact-output . ${REPOS_FILENAME})"
           echo "repos=${REPOS}" >> ${GITHUB_OUTPUT}
 
