@@ -6,11 +6,11 @@ on:
       repo_count:
         description: 'Number of demo repos to select'
         required: false
-        default: 2
+        default: 5
       repo_chance:
         description: '% chance each repo will get a commit+push'
         required: false
-        default: 100
+        default: 50
 
   #schedule: 
   #  - cron: '* * * * *' # Max, every 5 minutes
@@ -59,7 +59,6 @@ jobs:
                   
         - name: Create or commit to repo                                                                                                             
           run: |  
-            set -x
             if gh repo view "kosli-demo/${REPO_NAME}" > /dev/null 2>&1; then
               echo "${REPO_NAME} exists"
               gh repo clone "kosli-demo/${REPO_NAME}"
@@ -68,7 +67,7 @@ jobs:
               DATE_TIME="$(date +%Y-%m-%dT%H.%M.%S)"
               echo "${DATE_TIME}" >> .github/workflows/force-ci-run
               git add .github/workflows/force-ci-run
-              git commit -m "Simulated commit ${DATE_TIME}"
+              git commit --message "Simulated commit ${DATE_TIME}"
               git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/${REPO_NAME}.git"
               git push
             else
@@ -78,9 +77,9 @@ jobs:
               cp -r base-source/. "${REPO_NAME}-init/"
               cd "${REPO_NAME}-init"
               rm -rf .git
-              git init -b main
+              git init --initial-branch main
               git add .
-              git commit -m "Initial commit"
+              git commit --message "Initial commit"
               git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/${REPO_NAME}.git"
-              git push -u origin main
+              git push --set-upstream origin main
             fi
