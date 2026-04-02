@@ -6,11 +6,11 @@ on:
       repo_count:
         description: 'Number of demo repos to select'
         required: false
-        default: 5
+        default: 2
       repo_chance:
         description: '% chance each repo will get a commit+push'
         required: false
-        default: 50
+        default: 100
 
   #schedule: 
   #  - cron: '* * * * *' # Max, every 5 minutes
