@@ -6,8 +6,7 @@ Stochastically simulate a large Kosli organization, to get:
 - a large demo
 
 
-Each `.github/workflows/main.yml` run makes a copy of the [base](https://github.com/kosli-demo/base) repo into N other repos. Currently N is set to 2 in the line:
-```shell
-  jq '.[:2]' all-repos.json > "${REPOS_FILENAME}"
-```
+Each `.github/workflows/main.yml` run makes a simluated push to N other repos.
+N is set with the `repo_count` input parameter. 
+These repos are clones of the [base](https://github.com/kosli-demo/base) repo.
 
