@@ -52,14 +52,31 @@ jobs:
       REPO_NAME: ${{ matrix.repo_name }}
       GH_TOKEN: ${{ secrets.CLONE_PUSH_REPOS }}
     steps:
-      - name: Commit and push to repo
+      - name: Debug
         run: |
-          echo "REPO_NAME=:${REPO_NAME}:"
-          gh repo create kosli-demo/${REPO_NAME} --public --clone || true
           pwd
           ls -al
-          cd "${REPO_NAME}"
+
+      - uses: actions/checkout@v6
+        with:
+          repository: kosli-demo/base
+          token: ${{ secrets.CLONE_PUSH_REPOS }}
+          fetch-depth: 0
+          ref: 'main'
+
+      - name: Debug
+        run: |
+          pwd
           ls -al
+
+      # - name: Commit and push to repo
+      #   run: |
+      #     echo "REPO_NAME=:${REPO_NAME}:"
+      #     gh repo create kosli-demo/${REPO_NAME} --public --source ? --push || true
+      #     pwd
+      #     ls -al
+      #     cd "${REPO_NAME}"
+      #     ls -al
 
       # mv .git /tmp 
       # cd ..
