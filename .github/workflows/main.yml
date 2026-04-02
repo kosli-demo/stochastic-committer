@@ -52,71 +52,31 @@ jobs:
       REPO_NAME: ${{ matrix.repo_name }}
       GH_TOKEN: ${{ secrets.CLONE_PUSH_REPOS }}
     steps:
-      - name: Debug
-        run: |
-          pwd
-          ls -al
-
-      - uses: actions/checkout@v6
-        with:
-          repository: kosli-demo/base
-          token: ${{ secrets.CLONE_PUSH_REPOS }}
-          fetch-depth: 0
-          ref: 'main'
-
-      - name: Debug
-        run: |
-          pwd
-          ls -al
-
-      # - name: Commit and push to repo
-      #   run: |
-      #     echo "REPO_NAME=:${REPO_NAME}:"
-      #     gh repo create kosli-demo/${REPO_NAME} --public --source ? --push || true
-      #     pwd
-      #     ls -al
-      #     cd "${REPO_NAME}"
-      #     ls -al
-
-      # mv .git /tmp 
-      # cd ..
-      # clone base
-      # cd base
-      # rm -rf .git
-      # mv /tmp/git .
-      # MAKE A CHANGE
-      # git ....
-
-      # - name: Ensure repo exists
-      #   env:
-      #     GH_TOKEN: ${{ secrets.CLONE_PUSH_REPOS }}
-      #   run:
-      #     gh repo create kosli-demo/${REPO_NAME} --public || true
-
-      # - uses: actions/checkout@v6
-      #   with:
-      #     repository: kosli-demo/${REPO_NAME}
-      #     token: ${{ secrets.CLONE_PUSH_REPOS }}
-      #     fetch-depth: 0
-      #     ref: 'main'
-
-      # - name: Checkout base repo
-      #   run:
-      #     echo replace matrix.repo_name's files with base repos files
-
-      # - name: Make a change
-      #   run: |
-      #     pwd
-      #     ls -al
-      #     DATE_TIME="$(date +%Y-%m-%dT%H.%M.%S)"
-      #     echo "${DATE_TIME}" >> .github/workflows/force-ci-run
-
-      # - name: Commit and push
-      #   env:
-      #     GH_TOKEN: ${{ secrets.CLONE_PUSH_REPOS }}
-      #   run: |
-      #     git config --global user.name "${{ github.actor }}"
-      #     git config --global user.email "${{ github.event.sender.login }}@users.noreply.github.com"
-      #     git add .
-      #     git commit --message "Testing spreader"
-      #     git push
+        - name: Configure git                                                                                                                        
+          run: |                                                                                                                                     
+            git config --global user.name "${{ github.actor }}"                                                                                      
+            git config --global user.email "${{ github.event.sender.login }}@users.noreply.github.com"                                               
+                  
+        - name: Create or commit to repo                                                                                                             
+          run: |  
+            if gh repo view "kosli-demo/${REPO_NAME}" > /dev/null 2>&1; then                                                                         
+              gh repo clone "kosli-demo/${REPO_NAME}"
+              cd "${REPO_NAME}"                                                                                                                      
+              mkdir -p .github/workflows                                                                                                             
+              DATE_TIME="$(date +%Y-%m-%dT%H.%M.%S)"
+              echo "${DATE_TIME}" >> .github/workflows/force-ci-run                                                                                  
+              git add .github/workflows/force-ci-run
+              git commit -m "Simulated commit ${DATE_TIME}"                                                                                          
+              git push
+            else                                                                                                                                     
+              gh repo create "kosli-demo/${REPO_NAME}" --public
+              gh repo clone "kosli-demo/base" base-source
+              cp -r base-source/. "${REPO_NAME}-init/"                                                                                               
+              cd "${REPO_NAME}-init"
+              rm -rf .git                                                                                                                            
+              git init -b main
+              git add .
+              git commit -m "Initial commit"                                                                                                         
+              git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/${REPO_NAME}.git"
+              git push -u origin main                                                                                                                
+            fi
