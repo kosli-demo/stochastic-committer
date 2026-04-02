@@ -59,6 +59,7 @@ jobs:
                   
         - name: Create or commit to repo                                                                                                             
           run: |  
+            set -x
             if gh repo view "kosli-demo/${REPO_NAME}" > /dev/null 2>&1; then                                                                         
               gh repo clone "kosli-demo/${REPO_NAME}"
               cd "${REPO_NAME}"                                                                                                                      
