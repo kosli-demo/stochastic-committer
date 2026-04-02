@@ -69,7 +69,7 @@ jobs:
               echo "${DATE_TIME}" >> .github/workflows/force-ci-run
               git add .github/workflows/force-ci-run
               git commit -m "Simulated commit ${DATE_TIME}"
-              git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/${REPO_NAME}.git"
+              git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/${REPO_NAME}.git"
               git push
             else
               echo "${REPO_NAME} does not exist"
