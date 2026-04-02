@@ -44,6 +44,7 @@ jobs:
   commit-to-n-repos:
     needs: [set-n-repos]
     if: ${{ needs.set-n-repos.outputs.repos != '[]' }}
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         include: ${{ fromJSON(needs.set-n-repos.outputs.repos) }}
@@ -56,7 +57,7 @@ jobs:
           gh repo create kosli-demo/${REPO_NAME} --public --clone || true
           pwd
           ls -al
-          
+
       # cd repo
       # mv .git /tmp 
       # cd ..
