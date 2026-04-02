@@ -58,8 +58,9 @@ jobs:
           gh repo create kosli-demo/${REPO_NAME} --public --clone || true
           pwd
           ls -al
+          cd "${REPO_NAME}"
+          ls -al
 
-      # cd repo
       # mv .git /tmp 
       # cd ..
       # clone base
