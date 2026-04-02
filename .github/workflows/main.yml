@@ -1,14 +1,27 @@
-name: Main
+name: Simulate commits on many repos
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
+    inputs:
+      repo_count:
+        description: 'Number of demo repos to select'
+        required: false
+        default: 5
+      repo_chance:
+        description: '% chance each repo will get a commit+push'
+        required: false
+        default: 50
+
   #schedule: 
   #  - cron: '* * * * *' # Max, every 5 minutes
 
+env:
+  REPO_COUNT: ${{ inputs.repo_count }}
+  REPO_CHANCE: ${{ inputs.repo_chance }}
+
+
 jobs:
-  set-some-repos:
+  set-n-repos:
     needs: []
     runs-on: ubuntu-latest
     outputs:
@@ -23,18 +36,67 @@ jobs:
         run: |
           URL=https://raw.githubusercontent.com/kosli-demo/base/refs/heads/main/data/all-repos.json
           curl --fail --output temp.json --silent "${URL}"
-          ./bin/print_repos.py temp.json 3 100 > "${REPOS_FILENAME}"
+          ./bin/select_repos.py temp.json ${REPO_COUNT} ${REPO_CHANCE} > "${REPOS_FILENAME}"
           REPOS="$(jq --compact-output . ${REPOS_FILENAME})"
           echo "repos=${REPOS}" >> ${GITHUB_OUTPUT}
 
 
-  repo-names:
-    needs: [set-some-repos]
-    if: ${{ needs.set-some-repos.outputs.repos != '[]' }}
+  commit-to-n-repos:
+    needs: [set-n-repos]
+    if: ${{ needs.set-n-repos.outputs.repos != '[]' }}
     strategy:
       matrix:
-        include: ${{ fromJSON(needs.set-some-repos.outputs.repos) }}
-    uses: ./.github/workflows/repo_existence.yml
-    with:
-      repo_name:   ${{ matrix.repo_name }}
-      repo_exists: ${{ matrix.repo_exists }}
+        include: ${{ fromJSON(needs.set-n-repos.outputs.repos) }}
+    env:
+      REPO_NAME: ${{ matrix.repo_name }}        
+    steps:
+      - name: Commit and push to repo
+        run: |
+          echo "REPO_NAME=:${REPO_NAME}:"
+          gh repo create kosli-demo/${REPO_NAME} --public --clone || true
+          pwd
+          ls -al
+          
+      # cd repo
+      # mv .git /tmp 
+      # cd ..
+      # clone base
+      # cd base
+      # rm -rf .git
+      # mv /tmp/git .
+      # MAKE A CHANGE
+      # git ....
+
+      # - name: Ensure repo exists
+      #   env:
+      #     GH_TOKEN: ${{ secrets.CLONE_PUSH_REPOS }}
+      #   run:
+      #     gh repo create kosli-demo/${REPO_NAME} --public || true
+
+      # - uses: actions/checkout@v6
+      #   with:
+      #     repository: kosli-demo/${REPO_NAME}
+      #     token: ${{ secrets.CLONE_PUSH_REPOS }}
+      #     fetch-depth: 0
+      #     ref: 'main'
+
+      # - name: Checkout base repo
+      #   run:
+      #     echo replace matrix.repo_name's files with base repos files
+
+      # - name: Make a change
+      #   run: |
+      #     pwd
+      #     ls -al
+      #     DATE_TIME="$(date +%Y-%m-%dT%H.%M.%S)"
+      #     echo "${DATE_TIME}" >> .github/workflows/force-ci-run
+
+      # - name: Commit and push
+      #   env:
+      #     GH_TOKEN: ${{ secrets.CLONE_PUSH_REPOS }}
+      #   run: |
+      #     git config --global user.name "${{ github.actor }}"
+      #     git config --global user.email "${{ github.event.sender.login }}@users.noreply.github.com"
+      #     git add .
+      #     git commit --message "Testing spreader"
+      #     git push
