@@ -59,8 +59,9 @@ jobs:
                   
         - name: Create or commit to repo                                                                                                             
           run: |  
+            set -x
             if gh repo view "kosli-demo/${REPO_NAME}" > /dev/null 2>&1; then
-              # REPO_NAME exists
+              echo "${REPO_NAME} exists"
               gh repo clone "kosli-demo/${REPO_NAME}"
               cd "${REPO_NAME}"
               mkdir -p .github/workflows
@@ -71,7 +72,7 @@ jobs:
               git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/${REPO_NAME}.git"
               git push
             else
-              # REPO_NAME does not exist
+              echo "${REPO_NAME} does not exist"
               gh repo create "kosli-demo/${REPO_NAME}" --public
               gh repo clone "kosli-demo/base" base-source
               cp -r base-source/. "${REPO_NAME}-init/"
