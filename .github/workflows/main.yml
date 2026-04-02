@@ -59,25 +59,27 @@ jobs:
                   
         - name: Create or commit to repo                                                                                                             
           run: |  
-            set -x
-            if gh repo view "kosli-demo/${REPO_NAME}" > /dev/null 2>&1; then                                                                         
+            if gh repo view "kosli-demo/${REPO_NAME}" > /dev/null 2>&1; then
+              # REPO_NAME exists
               gh repo clone "kosli-demo/${REPO_NAME}"
-              cd "${REPO_NAME}"                                                                                                                      
-              mkdir -p .github/workflows                                                                                                             
+              cd "${REPO_NAME}"
+              mkdir -p .github/workflows
               DATE_TIME="$(date +%Y-%m-%dT%H.%M.%S)"
-              echo "${DATE_TIME}" >> .github/workflows/force-ci-run                                                                                  
+              echo "${DATE_TIME}" >> .github/workflows/force-ci-run
               git add .github/workflows/force-ci-run
-              git commit -m "Simulated commit ${DATE_TIME}"                                                                                          
+              git commit -m "Simulated commit ${DATE_TIME}"
+              git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/${REPO_NAME}.git"
               git push
-            else                                                                                                                                     
+            else
+              # REPO_NAME does not exist
               gh repo create "kosli-demo/${REPO_NAME}" --public
               gh repo clone "kosli-demo/base" base-source
-              cp -r base-source/. "${REPO_NAME}-init/"                                                                                               
+              cp -r base-source/. "${REPO_NAME}-init/"
               cd "${REPO_NAME}-init"
-              rm -rf .git                                                                                                                            
+              rm -rf .git
               git init -b main
               git add .
-              git commit -m "Initial commit"                                                                                                         
+              git commit -m "Initial commit"
               git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/${REPO_NAME}.git"
-              git push -u origin main                                                                                                                
+              git push -u origin main
             fi
