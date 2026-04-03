@@ -2,7 +2,6 @@
 
 import json
 import random
-import subprocess
 import sys
 
 
@@ -17,7 +16,7 @@ def print_help():
 
         Example: Process 1st 5 entries in temp.json and select with 50% chance
           
-          $ ./bin/select_repos.py ./docs/temp.json 100 3 | jq .
+          $ ./bin/select_repos.py ./docs/temp.json 5 50 | jq .
 
           [
             {
@@ -30,22 +29,7 @@ def print_help():
     """)
 
 
-def repo_exists(repo_name):
-    # HTTP_CODE="$(curl -s -o /dev/null -I -w "%{http_code}" https://github.com/kosli-demo/${REPO_NAME})"
-    command = [
-        'curl', '-s', '-o', '/dev/null', '-I', '-w', '%{http_code}',
-        f"https://github.com/kosli-demo/{repo_name}"
-    ]
-    result = subprocess.run(command, capture_output=True, text=True)
-    if result.returncode == 0:
-        http_code = result.stdout
-        return http_code.startswith('200')
-    else:
-        print(result.stderr)
-        sys.exit(result.returncode)
-
-
-def add_repo_exists():
+def select_repos():
     json_filename = sys.argv[1]
     n = int(sys.argv[2])
     chance = int(sys.argv[3])
@@ -65,4 +49,4 @@ if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] in ["-h", "--help"]:
         print_help()
     else:
-        print(json.dumps(add_repo_exists(), default=str))
+        print(json.dumps(select_repos(), default=str))
