@@ -60,13 +60,19 @@ jobs:
         - name: Create or commit to repo                                                                                                             
           run: |  
             if gh repo view "kosli-demo/${REPO_NAME}" > /dev/null 2>&1; then
-              echo "${REPO_NAME} exists"
+              echo "${REPO_NAME} exists"              
+
               gh repo clone "kosli-demo/${REPO_NAME}"
-              cd "${REPO_NAME}"
-              mkdir -p .github/workflows
+              mv "${REPO_NAME}"/.git /tmp
+              gh repo clone kosli-demo/base
+              cd base
+              rm -rf .git
+              mv /tmp/.git .
+
               DATE_TIME="$(date +%Y-%m-%dT%H.%M.%S)"
               echo "${DATE_TIME}" >> .github/workflows/force-ci-run
-              git add .github/workflows/force-ci-run
+
+              git add .
               git commit --message "Simulated commit ${DATE_TIME}"
               git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/${REPO_NAME}.git"
               git push
