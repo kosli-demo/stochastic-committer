@@ -56,7 +56,7 @@ def add_repo_exists():
     repos = []
     for i in range(0, n):
         r = random.randint(1, 100)
-        if r < chance:
+        if r <= chance:
             repos.append(json_data[i])
     return repos
 
