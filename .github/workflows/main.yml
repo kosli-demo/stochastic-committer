@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       scope:
-        description: 'Whether to run on staging or prod'
+        description: 'Where to attest to staging/prod/both'
         required: false
         default: staging
       repo_count:
@@ -96,7 +96,7 @@ jobs:
             fi
 
         - name: Trigger CI workflow in target repo, kosli attest to staging
-          if: ${{ inputs.scope == 'staging' }}
+          if: ${{ inputs.scope == 'staging' || inputs.scope == 'both' }}
           env:
             KOSLI_HOST: https://staging.app.kosli.com
             KOSLI_API_TOKEN: ${{ secrets.KOSLI_API_TOKEN_STAGING }}
@@ -108,7 +108,7 @@ jobs:
               --field kosli_api_token="${KOSLI_API_TOKEN}"
 
         - name: Trigger CI workflow in target repo, kosli attest to prod
-          if: ${{ inputs.scope == 'prod' }}
+          if: ${{ inputs.scope == 'prod' || inputs.scope == 'both' }}
           env:
             KOSLI_HOST: https://app.kosli.com
             KOSLI_API_TOKEN: ${{ secrets.KOSLI_API_TOKEN_PROD }}
