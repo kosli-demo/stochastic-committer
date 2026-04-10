@@ -83,6 +83,11 @@ jobs:
         with:
           egress-policy: audit
 
+      - name: Setup Kosli CLI
+        uses: kosli-dev/setup-cli-action@v3
+        with:
+          version: ${{ vars.KOSLI_CLI_VERSION }}
+
       - name: Configure git
         run: |
           git config --global user.name "${{ github.actor }}"
@@ -121,7 +126,10 @@ jobs:
             cd base
             rm -rf .git
             mv /tmp/.git .
+            echo "REPO_NAME=:${REPO_NAME}:"
             echo "${REPO_NAME} ${DATE_TIME}" > ./source/datetime.txt
+            cat ./source/datetime.txt
+            kosli fingerprint ./source/datetime.txt --artifact-type=file
             git add .
             git commit --message "Simulated commit ${DATE_TIME}"
             git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/${REPO_NAME}.git"
@@ -149,11 +157,13 @@ jobs:
           KOSLI_API_TOKEN: ${{ secrets.KOSLI_API_TOKEN_STAGING }}
         run: |
           BEFORE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          
           gh workflow run main.yml \
             --repo "kosli-demo/${REPO_NAME}" \
             --ref main \
             --field kosli_host="${KOSLI_HOST}" \
             --field kosli_api_token="${KOSLI_API_TOKEN}"
+
           for i in $(seq 1 12); do
             RUN_ID=$(gh run list \
               --repo "kosli-demo/${REPO_NAME}" \
@@ -172,6 +182,7 @@ jobs:
               exit 1
             fi
           done
+
           gh run watch "${RUN_ID}" \
             --repo "kosli-demo/${REPO_NAME}" \
             --exit-status
@@ -183,11 +194,13 @@ jobs:
           KOSLI_API_TOKEN: ${{ secrets.KOSLI_API_TOKEN_PROD }}
         run: |
           BEFORE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
           gh workflow run main.yml \
             --repo "kosli-demo/${REPO_NAME}" \
             --ref main \
             --field kosli_host="${KOSLI_HOST}" \
             --field kosli_api_token="${KOSLI_API_TOKEN}"
+          
           for i in $(seq 1 12); do
             RUN_ID=$(gh run list \
               --repo "kosli-demo/${REPO_NAME}" \
@@ -206,6 +219,7 @@ jobs:
               exit 1
             fi
           done
+
           gh run watch "${RUN_ID}" \
             --repo "kosli-demo/${REPO_NAME}" \
             --exit-status
@@ -223,17 +237,20 @@ jobs:
         with:
           egress-policy: audit
 
-      - name: Create N files ready for kosli snapshot paths
-        run: |
-          echo "${N_REPOS}" | jq --compact-output '.[]' | while read -r entry; do
-            repo_name="$(echo "${entry}" | jq --raw-output '.repo_name')"
-            echo "${repo_name} ${DATE_TIME}" > "${repo_name}.txt"
-          done
-
       - name: Setup Kosli CLI
         uses: kosli-dev/setup-cli-action@v3
         with:
           version: ${{ vars.KOSLI_CLI_VERSION }}
+
+      - name: Create N files ready for kosli snapshot paths
+        run: |
+          echo "${N_REPOS}" | jq --compact-output '.[]' | while read -r entry; do
+            repo_name="$(echo "${entry}" | jq --raw-output '.repo_name')"
+            echo "repo_name=:${repo_name}:"
+            echo "${repo_name} ${DATE_TIME}" > "${repo_name}.txt"
+            cat "${repo_name}.txt"
+            kosli fingerprint "${repo_name}.txt" --artifact-type=file
+          done
 
       - name: Create a Kosli paths file
         run: |
@@ -246,6 +263,7 @@ jobs:
               echo "    path: ${repo_name}.txt"
             done
           } > paths.yml
+          cat paths.yml
 
       - name: Kosli snapshot paths to staging
         if: ${{ inputs.scope == 'staging' || inputs.scope == 'both' }}
