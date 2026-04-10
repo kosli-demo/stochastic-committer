@@ -110,7 +110,7 @@ jobs:
             cd base
             rm -rf .git
             mv /tmp/.git .
-            echo "${REPO_NAME} ${DATE_TIME}" >> ./source/datetime.txt
+            echo "${REPO_NAME} ${DATE_TIME}" > ./source/datetime.txt
             git add .
             git commit --message "Simulated commit ${DATE_TIME}"
             git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/${REPO_NAME}.git"
