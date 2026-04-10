@@ -93,6 +93,17 @@ jobs:
           if ! gh repo view "kosli-demo/${REPO_NAME}" > /dev/null 2>&1; then
             echo "${REPO_NAME} does not exist"
             gh repo create "kosli-demo/${REPO_NAME}" --public
+            for i in $(seq 1 10); do
+              if gh repo view "kosli-demo/${REPO_NAME}" > /dev/null 2>&1; then
+                break
+              fi
+              echo "Waiting for repo to be available (attempt ${i}/10)..."
+              sleep 10
+              if [ "${i}" -eq 10 ]; then
+                echo "Repo kosli-demo/${REPO_NAME} not available after 10 attempts"
+                exit 1
+              fi
+            done
             gh repo clone "kosli-demo/base" base-source
             cp -r base-source/. "${REPO_NAME}-init/"
             cd "${REPO_NAME}-init"
