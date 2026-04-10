@@ -4,9 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       scope:
-        description: 'Where to attest to staging/prod/both'
-        required: false
-        default: staging
+        description: 'Where to attest to'
+        type: choice
+        required: true
+        options:
+          - staging
+          - prod
+          - both
       repo_count:
         description: 'Number of demo repos to select'
         required: false
