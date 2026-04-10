@@ -117,6 +117,20 @@ jobs:
             git push
           fi
 
+      - name: Wait for workflow to be available
+        run: |
+          for i in $(seq 1 10); do
+            if gh workflow view main.yml --repo "kosli-demo/${REPO_NAME}" > /dev/null 2>&1; then
+              break
+            fi
+            echo "Waiting for workflow to be available (attempt ${i}/10)..."
+            sleep 10
+            if [ "${i}" -eq 10 ]; then
+              echo "Workflow main.yml not found in kosli-demo/${REPO_NAME} after 10 attempts"
+              exit 1
+            fi
+          done
+
       - name: Trigger CI workflow in target repo, kosli attest to staging
         if: ${{ inputs.scope == 'staging' || inputs.scope == 'both' }}
         env:
