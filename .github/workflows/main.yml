@@ -229,6 +229,24 @@ jobs:
         with:
           egress-policy: audit
 
+      # TODO: A current limitation is that if repo_count==15 (say)
+      # then the new snapshot will always create 15 new artifacts.
+      # If repo_chance < 100% and some repos (3 say) are not selected, 
+      # we need those 3 to be the SAME as they were in the previous snapshot.
+      # Viz, the new snapshot would contains 12 new artifacts. This will
+      # allow a tuple such as (repo_count=250, repo_count=2) which will
+      # nicely simulate a sequence of changes from different repos.
+      # HOW?
+      # Update set-n-repos so it outputs all repo_count repo-names, and
+      # each entry has an added selected: true/false value.
+      # Then in the loop below, if the selected value is false, 
+      # we curl the latest .txt from that repo. This will result in
+      # a lot of curls for the (250,2) tuple above. 
+      # IDEA
+      # The master JSON array of repo-names could be tweaked so that
+      # specific repos are more likely to be selected. This could be 
+      # useful if we want to "shape" the data to give a better demo.
+
       - name: Setup Kosli CLI
         uses: kosli-dev/setup-cli-action@v3
         with:
