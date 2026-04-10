@@ -71,64 +71,64 @@ jobs:
         with:
           egress-policy: audit
 
-        - name: Configure git                                                                                                                        
-          run: |                                                                                                                                     
-            git config --global user.name "${{ github.actor }}"                                                                                      
-            git config --global user.email "${{ github.event.sender.login }}@users.noreply.github.com"                                               
+      - name: Configure git                                                                                                                        
+        run: |                                                                                                                                     
+          git config --global user.name "${{ github.actor }}"                                                                                      
+          git config --global user.email "${{ github.event.sender.login }}@users.noreply.github.com"                                               
                   
-        - name: Create or commit to repo                                                                                                             
-          run: |  
-            if gh repo view "kosli-demo/${REPO_NAME}" > /dev/null 2>&1; then
-              echo "${REPO_NAME} exists"              
+      - name: Create or commit to repo                                                                                                             
+        run: |  
+          if gh repo view "kosli-demo/${REPO_NAME}" > /dev/null 2>&1; then
+            echo "${REPO_NAME} exists"              
 
-              gh repo clone "kosli-demo/${REPO_NAME}"
-              mv "${REPO_NAME}"/.git /tmp
-              gh repo clone kosli-demo/base
-              cd base
-              rm -rf .git
-              mv /tmp/.git .
+            gh repo clone "kosli-demo/${REPO_NAME}"
+            mv "${REPO_NAME}"/.git /tmp
+            gh repo clone kosli-demo/base
+            cd base
+            rm -rf .git
+            mv /tmp/.git .
 
-              DATE_TIME="$(date +%Y-%m-%dT%H.%M.%S)"
-              echo "${REPO_NAME} ${DATE_TIME}" >> ./source/datetime.txt
+            DATE_TIME="$(date +%Y-%m-%dT%H.%M.%S)"
+            echo "${REPO_NAME} ${DATE_TIME}" >> ./source/datetime.txt
 
-              git add .
-              git commit --message "Simulated commit ${DATE_TIME}"
-              git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/${REPO_NAME}.git"
-              git push
-            else
-              echo "${REPO_NAME} does not exist"
-              gh repo create "kosli-demo/${REPO_NAME}" --public
-              gh repo clone "kosli-demo/base" base-source
-              cp -r base-source/. "${REPO_NAME}-init/"
-              cd "${REPO_NAME}-init"
-              rm -rf .git
-              git init --initial-branch main
-              git add .
-              git commit --message "Initial commit"
-              git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/${REPO_NAME}.git"
-              git push --set-upstream origin main
-            fi
+            git add .
+            git commit --message "Simulated commit ${DATE_TIME}"
+            git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/${REPO_NAME}.git"
+            git push
+          else
+            echo "${REPO_NAME} does not exist"
+            gh repo create "kosli-demo/${REPO_NAME}" --public
+            gh repo clone "kosli-demo/base" base-source
+            cp -r base-source/. "${REPO_NAME}-init/"
+            cd "${REPO_NAME}-init"
+            rm -rf .git
+            git init --initial-branch main
+            git add .
+            git commit --message "Initial commit"
+            git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/${REPO_NAME}.git"
+            git push --set-upstream origin main
+          fi
 
-        - name: Trigger CI workflow in target repo, kosli attest to staging
-          if: ${{ inputs.scope == 'staging' || inputs.scope == 'both' }}
-          env:
-            KOSLI_HOST: https://staging.app.kosli.com
-            KOSLI_API_TOKEN: ${{ secrets.KOSLI_API_TOKEN_STAGING }}
-          run:
-            gh workflow run main.yml
-              --repo "kosli-demo/${REPO_NAME}"
-              --ref main
-              --field kosli_host="${KOSLI_HOST}"
-              --field kosli_api_token="${KOSLI_API_TOKEN}"
+      - name: Trigger CI workflow in target repo, kosli attest to staging
+        if: ${{ inputs.scope == 'staging' || inputs.scope == 'both' }}
+        env:
+          KOSLI_HOST: https://staging.app.kosli.com
+          KOSLI_API_TOKEN: ${{ secrets.KOSLI_API_TOKEN_STAGING }}
+        run:
+          gh workflow run main.yml
+            --repo "kosli-demo/${REPO_NAME}"
+            --ref main
+            --field kosli_host="${KOSLI_HOST}"
+            --field kosli_api_token="${KOSLI_API_TOKEN}"
 
-        - name: Trigger CI workflow in target repo, kosli attest to prod
-          if: ${{ inputs.scope == 'prod' || inputs.scope == 'both' }}
-          env:
-            KOSLI_HOST: https://app.kosli.com
-            KOSLI_API_TOKEN: ${{ secrets.KOSLI_API_TOKEN_PROD }}
-          run:
-            gh workflow run main.yml
-              --repo "kosli-demo/${REPO_NAME}"
-              --ref main
-              --field kosli_host="${KOSLI_HOST}"
-              --field kosli_api_token="${KOSLI_API_TOKEN}"
+      - name: Trigger CI workflow in target repo, kosli attest to prod
+        if: ${{ inputs.scope == 'prod' || inputs.scope == 'both' }}
+        env:
+          KOSLI_HOST: https://app.kosli.com
+          KOSLI_API_TOKEN: ${{ secrets.KOSLI_API_TOKEN_PROD }}
+        run:
+          gh workflow run main.yml
+            --repo "kosli-demo/${REPO_NAME}"
+            --ref main
+            --field kosli_host="${KOSLI_HOST}"
+            --field kosli_api_token="${KOSLI_API_TOKEN}"
