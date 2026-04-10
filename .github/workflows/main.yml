@@ -3,6 +3,10 @@ name: Simulate commits on many repos
 on:
   workflow_dispatch:
     inputs:
+      scope:
+        description: 'Whether to run on staging or prod'
+        required: false
+        default: staging
       repo_count:
         description: 'Number of demo repos to select'
         required: false
@@ -52,6 +56,8 @@ jobs:
     env:
       REPO_NAME: ${{ matrix.repo_name }}
       GH_TOKEN: ${{ secrets.CLONE_PUSH_REPOS }}
+      KOSLI_HOST: ${{ vars.KOSLI_HOST }}
+      KOSLI_API_TOKEN: ${{ secrets.KOSLI_API_TOKEN }}
     steps:
         - name: Configure git                                                                                                                        
           run: |                                                                                                                                     
@@ -90,3 +96,11 @@ jobs:
               git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/${REPO_NAME}.git"
               git push --set-upstream origin main
             fi
+
+        - name: Trigger CI workflow in target repo
+          run:
+            gh workflow run main.yml
+              --repo "kosli-demo/${REPO_NAME}"
+              --ref main
+              --field kosli_host="${KOSLI_HOST}"
+              --field kosli_api_token="${KOSLI_API_TOKEN}"
