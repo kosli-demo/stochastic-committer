@@ -36,6 +36,11 @@ jobs:
     outputs:
       repos: ${{ steps.set-repos.outputs.repos }}
     steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@v6
 
       - name: Select repo names
@@ -61,6 +66,11 @@ jobs:
       REPO_NAME: ${{ matrix.repo_name }}
       GH_TOKEN: ${{ secrets.CLONE_PUSH_REPOS }}
     steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+
         - name: Configure git                                                                                                                        
           run: |                                                                                                                                     
             git config --global user.name "${{ github.actor }}"                                                                                      
