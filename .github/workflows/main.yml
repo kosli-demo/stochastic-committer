@@ -25,6 +25,9 @@ on:
   #  - cron: '* 10 * * *'  # Every 10 minutes
 
 env:
+  KOSLI_ORG: ${{ vars.KOSLI_ORG }}
+  KOSLI_DEBUG: ${{ vars.KOSLI_DEBUG }}
+  KOSLI_DRY_RUN: ${{ vars.KOSLI_DRY_RUN }}
   REPO_COUNT: ${{ inputs.repo_count }}
   REPO_CHANCE: ${{ inputs.repo_chance }}
 
