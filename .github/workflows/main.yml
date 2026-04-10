@@ -83,11 +83,6 @@ jobs:
         with:
           egress-policy: audit
 
-      - name: Setup Kosli CLI
-        uses: kosli-dev/setup-cli-action@v3
-        with:
-          version: ${{ vars.KOSLI_CLI_VERSION }}
-
       - name: Configure git
         run: |
           git config --global user.name "${{ github.actor }}"
@@ -126,10 +121,7 @@ jobs:
             cd base
             rm -rf .git
             mv /tmp/.git .
-            echo "REPO_NAME=:${REPO_NAME}:"
             echo "${REPO_NAME} ${DATE_TIME}" > ./source/datetime.txt
-            cat ./source/datetime.txt
-            kosli fingerprint ./source/datetime.txt --artifact-type=file
             git add .
             git commit --message "Simulated commit ${DATE_TIME}"
             git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/${REPO_NAME}.git"
@@ -246,10 +238,7 @@ jobs:
         run: |
           echo "${N_REPOS}" | jq --compact-output '.[]' | while read -r entry; do
             repo_name="$(echo "${entry}" | jq --raw-output '.repo_name')"
-            echo "repo_name=:${repo_name}:"
             echo "${repo_name} ${DATE_TIME}" > "${repo_name}.txt"
-            cat "${repo_name}.txt"
-            kosli fingerprint "${repo_name}.txt" --artifact-type=file
           done
 
       - name: Create a Kosli paths file
@@ -263,7 +252,6 @@ jobs:
               echo "    path: ${repo_name}.txt"
             done
           } > paths.yml
-          cat paths.yml
 
       - name: Kosli snapshot paths to staging
         if: ${{ inputs.scope == 'staging' || inputs.scope == 'both' }}
