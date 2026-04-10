@@ -22,7 +22,7 @@ on:
 
   #schedule: 
   #  - cron: '* * * * *'   # Every 5 minutes (max)
-  #  - cron: '*/10 * * *'  # Every 10 minutes
+  #  - cron: '* 10 * * *'  # Every 10 minutes
 
 env:
   REPO_COUNT: ${{ inputs.repo_count }}
@@ -34,7 +34,9 @@ jobs:
     needs: []
     runs-on: ubuntu-latest
     outputs:
-      repos: ${{ steps.set-repos.outputs.repos }}
+      date_time: ${{ steps.set-repos.outputs.date_time }}
+      n_repos: ${{ steps.set-repos.outputs.n_repos }}
+      selected_repos: ${{ steps.set-repos.outputs.selected_repos }}
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@v2
@@ -45,24 +47,31 @@ jobs:
 
       - name: Select repo names
         id: set-repos
-        env:
-          REPOS_FILENAME: repos.json
         run: |
+          DATE_TIME="$(date +%Y-%m-%dT%H.%M.%S)"
+          echo "date_time=${DATE_TIME}" >> ${GITHUB_OUTPUT}
+
           URL=https://raw.githubusercontent.com/kosli-demo/base/refs/heads/main/data/all-repos.json
-          curl --fail --output temp.json --silent "${URL}"
-          ./bin/select_repos.py temp.json ${REPO_COUNT} ${REPO_CHANCE} > "${REPOS_FILENAME}"
-          REPOS="$(jq --compact-output . ${REPOS_FILENAME})"
-          echo "repos=${REPOS}" >> ${GITHUB_OUTPUT}
+          curl --fail --output all_repos.json --silent "${URL}"
+
+          ./bin/select_repos.py all_repos.json ${REPO_COUNT} 100 > n_repos.json
+          N_REPOS="$(jq --compact-output . n_repos.json)"
+          echo "n_repos=${N_REPOS}" >> ${GITHUB_OUTPUT}
+
+          ./bin/select_repos.py all_repos.json ${REPO_COUNT} ${REPO_CHANCE} > selected_repos.json
+          SELECTED_REPOS="$(jq --compact-output . selected_repos.json)"
+          echo "selected_repos=${SELECTED_REPOS}" >> ${GITHUB_OUTPUT}
 
 
   commit-to-n-repos:
     needs: [set-n-repos]
-    if: ${{ needs.set-n-repos.outputs.repos != '[]' }}
+    if: ${{ needs.set-n-repos.outputs.selected_repos != '[]' }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        include: ${{ fromJSON(needs.set-n-repos.outputs.repos) }}
+        include: ${{ fromJSON(needs.set-n-repos.outputs.selected_repos) }}
     env:
+      DATE_TIME: ${{ needs.set-n-repos.outputs.date_time }}
       REPO_NAME: ${{ matrix.repo_name }}
       GH_TOKEN: ${{ secrets.CLONE_PUSH_REPOS }}
     steps:
@@ -71,31 +80,14 @@ jobs:
         with:
           egress-policy: audit
 
-      - name: Configure git                                                                                                                        
-        run: |                                                                                                                                     
-          git config --global user.name "${{ github.actor }}"                                                                                      
-          git config --global user.email "${{ github.event.sender.login }}@users.noreply.github.com"                                               
+      - name: Configure git
+        run: |
+          git config --global user.name "${{ github.actor }}"
+          git config --global user.email "${{ github.event.sender.login }}@users.noreply.github.com"
                   
-      - name: Create or commit to repo                                                                                                             
-        run: |  
-          if gh repo view "kosli-demo/${REPO_NAME}" > /dev/null 2>&1; then
-            echo "${REPO_NAME} exists"              
-
-            gh repo clone "kosli-demo/${REPO_NAME}"
-            mv "${REPO_NAME}"/.git /tmp
-            gh repo clone kosli-demo/base
-            cd base
-            rm -rf .git
-            mv /tmp/.git .
-
-            DATE_TIME="$(date +%Y-%m-%dT%H.%M.%S)"
-            echo "${REPO_NAME} ${DATE_TIME}" >> ./source/datetime.txt
-
-            git add .
-            git commit --message "Simulated commit ${DATE_TIME}"
-            git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/${REPO_NAME}.git"
-            git push
-          else
+      - name: Create or commit to repo
+        run: |
+          if ! gh repo view "kosli-demo/${REPO_NAME}" > /dev/null 2>&1; then
             echo "${REPO_NAME} does not exist"
             gh repo create "kosli-demo/${REPO_NAME}" --public
             gh repo clone "kosli-demo/base" base-source
@@ -107,6 +99,19 @@ jobs:
             git commit --message "Initial commit"
             git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/${REPO_NAME}.git"
             git push --set-upstream origin main
+          else
+            echo "${REPO_NAME} exists"
+            gh repo clone "kosli-demo/${REPO_NAME}"
+            mv "${REPO_NAME}"/.git /tmp
+            gh repo clone kosli-demo/base
+            cd base
+            rm -rf .git
+            mv /tmp/.git .
+            echo "${REPO_NAME} ${DATE_TIME}" >> ./source/datetime.txt
+            git add .
+            git commit --message "Simulated commit ${DATE_TIME}"
+            git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/${REPO_NAME}.git"
+            git push
           fi
 
       - name: Trigger CI workflow in target repo, kosli attest to staging
@@ -132,3 +137,61 @@ jobs:
             --ref main
             --field kosli_host="${KOSLI_HOST}"
             --field kosli_api_token="${KOSLI_API_TOKEN}"
+
+
+  simulate-deployments:
+    needs: [set-n-repos, commit-to-n-repos]
+    runs-on: ubuntu-latest
+    env:
+      DATE_TIME: ${{ needs.set-n-repos.outputs.date_time }}
+      N_REPOS: ${{ needs.set-n-repos.outputs.n_repos }}
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+
+      - name: Create N files ready for kosli snapshot paths
+        run: |
+          echo "${N_REPOS}" | jq --compact-output '.[]' | while read -r entry; do
+            repo_name="$(echo "${entry}" | jq --raw-output '.repo_name')"
+            echo "${repo_name} ${DATE_TIME}" > "${repo_name}.txt"
+          done
+
+      - name: Setup Kosli CLI
+        uses: kosli-dev/setup-cli-action@v3
+        with:
+          version: ${{ vars.KOSLI_CLI_VERSION }}
+
+      - name: Create a Kosli paths file
+        run: |
+          {
+            echo "version: 1"
+            echo "artifacts:"
+            echo "${N_REPOS}" | jq --compact-output '.[]' | while read -r entry; do
+              repo_name="$(echo "${entry}" | jq --raw-output '.repo_name')"
+              echo "  ${repo_name}:"
+              echo "    path: ${repo_name}.txt"
+            done
+          } > paths.yml
+
+      - name: Kosli snapshot paths to staging
+        if: ${{ inputs.scope == 'staging' || inputs.scope == 'both' }}
+        env:
+          KOSLI_HOST: https://staging.app.kosli.com
+          KOSLI_API_TOKEN: ${{ secrets.KOSLI_API_TOKEN_STAGING }}
+        run:
+          kosli snapshot paths staging
+            --paths-file paths.yml
+
+      - name: Kosli snapshot paths to prod
+        if: ${{ inputs.scope == 'prod' || inputs.scope == 'both' }}
+        env:
+          KOSLI_HOST: https://app.kosli.com
+          KOSLI_API_TOKEN: ${{ secrets.KOSLI_API_TOKEN_PROD }}
+        run:
+          kosli snapshot paths prod
+            --paths-file paths.yml
+
+
+
