@@ -50,7 +50,7 @@ jobs:
       - name: Select repo names
         id: set-repos
         run: |
-          DATE_TIME="$(date +%Y-%m-%dT%H.%M.%S)"
+          DATE_TIME="$(date +%s)"
           echo "date_time=${DATE_TIME}" >> ${GITHUB_OUTPUT}
 
           URL=https://raw.githubusercontent.com/kosli-demo/base/refs/heads/main/data/all-repos.json
@@ -105,10 +105,12 @@ jobs:
             if [ "${selected}" = "true" ]; then
               echo "${repo_name} == selected"
               echo "${repo_name} ${DATE_TIME}" > "${repo_name}.txt"
+              touch -d "@${DATE_TIME}" "${repo_name}.txt"
             else
               echo "${repo_name} == NOT selected"
               curl --fail --output "${repo_name}.txt" --silent \
                 "https://raw.githubusercontent.com/kosli-demo/${repo_name}/refs/heads/main/source/datetime.txt"
+              touch -d "@$(cut -d' ' -f2 "${repo_name}.txt")" "${repo_name}.txt"
             fi
             kosli fingerprint "${repo_name}.txt" --artifact-type=file
           done
