@@ -39,7 +39,6 @@ jobs:
     outputs:
       date_time: ${{ steps.set-repos.outputs.date_time }}
       n_repos: ${{ steps.set-repos.outputs.n_repos }}
-      selected_repos: ${{ steps.set-repos.outputs.selected_repos }}
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@v2
@@ -57,22 +56,18 @@ jobs:
           URL=https://raw.githubusercontent.com/kosli-demo/base/refs/heads/main/data/all-repos.json
           curl --fail --output all_repos.json --silent "${URL}"
 
-          ./bin/select_repos.py all_repos.json ${REPO_COUNT} 100 > n_repos.json
+          ./bin/select_repos.py all_repos.json ${REPO_COUNT} ${REPO_CHANCE} > n_repos.json
           N_REPOS="$(jq --compact-output . n_repos.json)"
           echo "n_repos=${N_REPOS}" >> ${GITHUB_OUTPUT}
-
-          ./bin/select_repos.py all_repos.json ${REPO_COUNT} ${REPO_CHANCE} > selected_repos.json
-          SELECTED_REPOS="$(jq --compact-output . selected_repos.json)"
-          echo "selected_repos=${SELECTED_REPOS}" >> ${GITHUB_OUTPUT}
 
 
   commit-to-n-repos:
     needs: [set-n-repos]
-    if: ${{ needs.set-n-repos.outputs.selected_repos != '[]' }}
+    if: ${{ needs.set-n-repos.outputs.n_repos != '[]' }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        include: ${{ fromJSON(needs.set-n-repos.outputs.selected_repos) }}
+        include: ${{ fromJSON(needs.set-n-repos.outputs.n_repos) }}
     env:
       DATE_TIME: ${{ needs.set-n-repos.outputs.date_time }}
       REPO_NAME: ${{ matrix.repo_name }}
@@ -256,7 +251,13 @@ jobs:
         run: |
           echo "${N_REPOS}" | jq --compact-output '.[]' | while read -r entry; do
             repo_name="$(echo "${entry}" | jq --raw-output '.repo_name')"
-            echo "${repo_name} ${DATE_TIME}" > "${repo_name}.txt"
+            selected="$(echo "${entry}" | jq --raw-output '.selected')"
+            if [ "${selected}" = "true" ]; then
+              echo "${repo_name} ${DATE_TIME}" > "${repo_name}.txt"
+            else
+              curl --fail --output "${repo_name}.txt" --silent \
+                "https://raw.githubusercontent.com/kosli-demo/${repo_name}/refs/heads/main/source/datetime.txt"
+            fi
           done
 
       - name: Create a Kosli paths file
