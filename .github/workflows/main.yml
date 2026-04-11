@@ -252,12 +252,16 @@ jobs:
           echo "${N_REPOS}" | jq --compact-output '.[]' | while read -r entry; do
             repo_name="$(echo "${entry}" | jq --raw-output '.repo_name')"
             selected="$(echo "${entry}" | jq --raw-output '.selected')"
+            echo
             if [ "${selected}" = "true" ]; then
+              echo "${REPO_NAME} == selected"
               echo "${repo_name} ${DATE_TIME}" > "${repo_name}.txt"
             else
+              echo "${REPO_NAME} == NOT selected"
               curl --fail --output "${repo_name}.txt" --silent \
                 "https://raw.githubusercontent.com/kosli-demo/${repo_name}/refs/heads/main/source/datetime.txt"
             fi
+            kosli fingerprint "${repo_name}.txt" --artifact-type=file
           done
 
       - name: Create a Kosli paths file
