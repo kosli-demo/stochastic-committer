@@ -1,0 +1,4 @@
+
+The master JSON array of repo-names could be tweaked so that
+specific repos are more likely to be selected. This could be 
+useful if we want to "shape" the data to give a better demo.
