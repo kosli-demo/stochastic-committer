@@ -12,6 +12,9 @@ on:
       repo_name:
         type: string
         required: true
+      selected:
+        type: boolean
+        required: true
     secrets:
       CLONE_PUSH_REPOS:
         required: true
@@ -22,6 +25,7 @@ on:
 
 jobs:
   commit-to-repo:
+    if: ${{ inputs.selected }}
     runs-on: ubuntu-latest
     env:
       DATE_TIME: ${{ inputs.date_time }}

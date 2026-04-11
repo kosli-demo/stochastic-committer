@@ -63,7 +63,7 @@ jobs:
 
   commit-to-n-repos:
     needs: [set-n-repos]
-    if: ${{ needs.set-n-repos.outputs.n_repos != '[]' && matrix.selected }}
+    if: ${{ needs.set-n-repos.outputs.n_repos != '[]' }}
     strategy:
       matrix:
         include: ${{ fromJSON(needs.set-n-repos.outputs.n_repos) }}
@@ -72,6 +72,7 @@ jobs:
       scope: ${{ inputs.scope }}
       date_time: ${{ needs.set-n-repos.outputs.date_time }}
       repo_name: ${{ matrix.repo_name }}
+      selected: ${{ matrix.selected }}
     secrets:
       CLONE_PUSH_REPOS: ${{ secrets.CLONE_PUSH_REPOS }}
       KOSLI_API_TOKEN_STAGING: ${{ secrets.KOSLI_API_TOKEN_STAGING }}
