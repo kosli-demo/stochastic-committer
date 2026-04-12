@@ -96,7 +96,7 @@ jobs:
             github=https://raw.githubusercontent.com
             url="${github}/kosli-demo/${repo_name}/refs/heads/main/source/datetime.txt"
             curl --fail --output "${repo_name}.txt" --silent "${url}"
-            timestamp="@$(cut -d' ' -f2 "${repo_name}.txt")"
+            timestamp="$(cut -d' ' -f2 "${repo_name}.txt")"
             touch -d "@${timestamp}" "${repo_name}.txt"
           done
 
