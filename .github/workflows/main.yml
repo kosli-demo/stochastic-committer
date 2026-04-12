@@ -92,12 +92,12 @@ jobs:
       - name: Create N files ready for kosli snapshot paths
         run: |
           echo "${N_REPOS}" | jq --compact-output '.[]' | while read -r entry; do
-            repo_name="$(echo "${entry}" | jq --raw-output '.repo_name')"
+            REPO_NAME="$(echo "${entry}" | jq --raw-output '.repo_name')"
             github=https://raw.githubusercontent.com
-            url="${github}/kosli-demo/${repo_name}/refs/heads/main/source/datetime.txt"
-            curl --fail --output "${repo_name}.txt" --silent "${url}"
-            timestamp="$(cut -d' ' -f2 "${repo_name}.txt")"
-            touch -d "@${timestamp}" "${repo_name}.txt"
+            URL="${github}/kosli-demo/${REPO_NAME}/refs/heads/main/source/datetime.txt"
+            curl --fail --output "${REPO_NAME}.txt" --silent "${URL}"
+            TIMESTAMP="$(cut -d' ' -f2 "${REPO_NAME}.txt")"
+            touch -d "@${TIMESTAMP}" "${REPO_NAME}.txt"
           done
 
       - name: Create a Kosli --paths-file for N files
@@ -106,9 +106,9 @@ jobs:
             echo "version: 1"
             echo "artifacts:"
             echo "${N_REPOS}" | jq --compact-output '.[]' | while read -r entry; do
-              repo_name="$(echo "${entry}" | jq --raw-output '.repo_name')"
-              echo "  ${repo_name}:"
-              echo "    path: ${repo_name}.txt"
+              REPO_NAME="$(echo "${entry}" | jq --raw-output '.repo_name')"
+              echo "  ${REPO_NAME}:"
+              echo "    path: ${REPO_NAME}.txt"
             done
           } > paths.yml
 

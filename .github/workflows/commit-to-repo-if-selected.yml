@@ -41,8 +41,10 @@ jobs:
       - name: Commit to repo
         run: |
           if ! gh repo view "kosli-demo/${REPO_NAME}" > /dev/null 2>&1; then
-            # Repo does not exist
+            # Repo does not exist so create it
             gh repo create "kosli-demo/${REPO_NAME}" --public
+
+            # Wait for repo creation to finish
             for i in $(seq 1 10); do
               if gh repo view "kosli-demo/${REPO_NAME}" > /dev/null 2>&1; then
                 break
@@ -54,32 +56,21 @@ jobs:
                 exit 1
               fi
             done
-            gh repo clone "kosli-demo/base" base-source
-            cp -r base-source/. "${REPO_NAME}-init/"
-            cd "${REPO_NAME}-init"
-            rm -rf .git
-            git init --initial-branch main
-            timestamp="$(date +%s)"
-            echo "${REPO_NAME} ${timestamp}" > ./source/datetime.txt
-            git add .
-            git commit --message "Initial commit"
-            git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/${REPO_NAME}.git"
-            git push --set-upstream origin main
-          else
-            # Repo exists
-            gh repo clone "kosli-demo/${REPO_NAME}"
-            mv "${REPO_NAME}"/.git /tmp
-            gh repo clone kosli-demo/base
-            cd base
-            rm -rf .git
-            mv /tmp/.git .
-            timestamp="$(date +%s)"
-            echo "${REPO_NAME} ${timestamp}" > ./source/datetime.txt
-            git add .
-            git commit --message "Simulated commit ${timestamp}"
-            git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/${REPO_NAME}.git"
-            git push
           fi
+          
+          # Commit latest copy of base
+          gh repo clone "kosli-demo/${REPO_NAME}"
+          mv "${REPO_NAME}"/.git /tmp
+          gh repo clone kosli-demo/base
+          cd base
+          rm -rf .git
+          mv /tmp/.git .
+          TIMESTAMP="$(date +%s)"
+          echo "${REPO_NAME} ${TIMESTAMP}" > ./source/datetime.txt
+          git add .
+          git commit --message "Simulated commit ${TIMESTAMP}"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/${REPO_NAME}.git"
+          git push -u origin main
 
       - name: Wait for repo workflow to be available
         run: |
@@ -95,7 +86,7 @@ jobs:
             fi
           done
 
-      - name: Run CI workflow in target repo
+      - name: Run CI workflow
         run: |
           # Setup where triggered workflow will attest to
           case "${{ inputs.scope }}" in
