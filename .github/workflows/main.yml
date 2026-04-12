@@ -56,8 +56,21 @@ jobs:
           echo "n_repos=${N_REPOS}" >> ${GITHUB_OUTPUT}
 
 
-  commit-to-some-repos:
+  ensure-n-repos-exist:
     needs: [select-n-repos]
+    if: ${{ needs.select-n-repos.outputs.n_repos != '[]' }}
+    strategy:
+      matrix:
+        include: ${{ fromJSON(needs.select-n-repos.outputs.n_repos) }}
+    uses: ./.github/workflows/ensure-repo-exists.yml
+    with:
+      repo_name: ${{ matrix.repo_name }}
+    secrets:
+      CLONE_PUSH_REPOS: ${{ secrets.CLONE_PUSH_REPOS }}
+
+
+  simulate-commits-to-selected-repos:
+    needs: [select-n-repos, ensure-n-repos-exist]
     if: ${{ needs.select-n-repos.outputs.n_repos != '[]' }}
     strategy:
       matrix:
@@ -73,8 +86,8 @@ jobs:
       KOSLI_API_TOKEN_PROD: ${{ secrets.KOSLI_API_TOKEN_PROD }}
 
 
-  simulate-some-deployments:
-    needs: [select-n-repos, commit-to-some-repos]
+  simulate-deployments-from-some-repos:
+    needs: [select-n-repos, simulate-commits-to-selected-repos]
     runs-on: ubuntu-latest
     env:
       N_REPOS: ${{ needs.select-n-repos.outputs.n_repos }}
