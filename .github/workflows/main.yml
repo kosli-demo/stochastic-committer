@@ -33,11 +33,10 @@ env:
 
 
 jobs:
-  set-n-repos:
+  select-n-repos:
     needs: []
     runs-on: ubuntu-latest
     outputs:
-      date_time: ${{ steps.set-repos.outputs.date_time }}
       n_repos: ${{ steps.set-repos.outputs.n_repos }}
     steps:
       - name: Harden Runner
@@ -50,27 +49,22 @@ jobs:
       - name: Select repo names
         id: set-repos
         run: |
-          DATE_TIME="$(date +%s)"
-          echo "date_time=${DATE_TIME}" >> ${GITHUB_OUTPUT}
-
           URL=https://raw.githubusercontent.com/kosli-demo/base/refs/heads/main/data/all-repos.json
           curl --fail --output all_repos.json --silent "${URL}"
-
           ./bin/select_repos.py all_repos.json ${REPO_COUNT} ${REPO_CHANCE} > n_repos.json
           N_REPOS="$(jq --compact-output . n_repos.json)"
           echo "n_repos=${N_REPOS}" >> ${GITHUB_OUTPUT}
 
 
-  commit-to-n-repos:
-    needs: [set-n-repos]
-    if: ${{ needs.set-n-repos.outputs.n_repos != '[]' }}
+  commit-to-some-repos:
+    needs: [select-n-repos]
+    if: ${{ needs.select-n-repos.outputs.n_repos != '[]' }}
     strategy:
       matrix:
-        include: ${{ fromJSON(needs.set-n-repos.outputs.n_repos) }}
-    uses: ./.github/workflows/commit-to-repo.yml
+        include: ${{ fromJSON(needs.select-n-repos.outputs.n_repos) }}
+    uses: ./.github/workflows/commit-to-repo-if-selected.yml
     with:
       scope: ${{ inputs.scope }}
-      date_time: ${{ needs.set-n-repos.outputs.date_time }}
       repo_name: ${{ matrix.repo_name }}
       selected: ${{ matrix.selected }}
     secrets:
@@ -79,12 +73,11 @@ jobs:
       KOSLI_API_TOKEN_PROD: ${{ secrets.KOSLI_API_TOKEN_PROD }}
 
 
-  simulate-deployments:
-    needs: [set-n-repos, commit-to-n-repos]
+  simulate-some-deployments:
+    needs: [select-n-repos, commit-to-some-repos]
     runs-on: ubuntu-latest
     env:
-      DATE_TIME: ${{ needs.set-n-repos.outputs.date_time }}
-      N_REPOS: ${{ needs.set-n-repos.outputs.n_repos }}
+      N_REPOS: ${{ needs.select-n-repos.outputs.n_repos }}
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@v2
@@ -100,22 +93,14 @@ jobs:
         run: |
           echo "${N_REPOS}" | jq --compact-output '.[]' | while read -r entry; do
             repo_name="$(echo "${entry}" | jq --raw-output '.repo_name')"
-            selected="$(echo "${entry}" | jq --raw-output '.selected')"
-            echo
-            if [ "${selected}" = "true" ]; then
-              echo "${repo_name} == selected"
-              echo "${repo_name} ${DATE_TIME}" > "${repo_name}.txt"
-              touch -d "@${DATE_TIME}" "${repo_name}.txt"
-            else
-              echo "${repo_name} == NOT selected"
-              curl --fail --output "${repo_name}.txt" --silent \
-                "https://raw.githubusercontent.com/kosli-demo/${repo_name}/refs/heads/main/source/datetime.txt"
-              touch -d "@$(cut -d' ' -f2 "${repo_name}.txt")" "${repo_name}.txt"
-            fi
-            kosli fingerprint "${repo_name}.txt" --artifact-type=file
+            github=https://raw.githubusercontent.com
+            url="${github}/kosli-demo/${repo_name}/refs/heads/main/source/datetime.txt"
+            curl --fail --output "${repo_name}.txt" --silent "${url}"
+            timestamp="@$(cut -d' ' -f2 "${repo_name}.txt")"
+            touch -d "@${timestamp}" "${repo_name}.txt"
           done
 
-      - name: Create a Kosli paths file
+      - name: Create a Kosli --paths-file for N files
         run: |
           {
             echo "version: 1"
@@ -144,6 +129,3 @@ jobs:
         run:
           kosli snapshot paths staging
             --paths-file paths.yml
-
-
-

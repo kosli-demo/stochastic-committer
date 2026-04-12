@@ -1,12 +1,9 @@
-name: Commit to repo
+name: Commit to repo if selected
 
 on:
   workflow_call:
     inputs:
       scope:
-        type: string
-        required: true
-      date_time:
         type: string
         required: true
       repo_name:
@@ -28,7 +25,6 @@ jobs:
     if: ${{ inputs.selected }}
     runs-on: ubuntu-latest
     env:
-      DATE_TIME: ${{ inputs.date_time }}
       REPO_NAME: ${{ inputs.repo_name }}
       GH_TOKEN: ${{ secrets.CLONE_PUSH_REPOS }}
     steps:
@@ -42,10 +38,10 @@ jobs:
           git config --global user.name "${{ github.actor }}"
           git config --global user.email "${{ github.event.sender.login }}@users.noreply.github.com"
 
-      - name: Create or commit to repo
+      - name: Commit to repo
         run: |
           if ! gh repo view "kosli-demo/${REPO_NAME}" > /dev/null 2>&1; then
-            echo "${REPO_NAME} does not exist"
+            # Repo does not exist
             gh repo create "kosli-demo/${REPO_NAME}" --public
             for i in $(seq 1 10); do
               if gh repo view "kosli-demo/${REPO_NAME}" > /dev/null 2>&1; then
@@ -63,26 +59,29 @@ jobs:
             cd "${REPO_NAME}-init"
             rm -rf .git
             git init --initial-branch main
+            timestamp="$(date +%s)"
+            echo "${REPO_NAME} ${timestamp}" > ./source/datetime.txt
             git add .
             git commit --message "Initial commit"
             git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/${REPO_NAME}.git"
             git push --set-upstream origin main
           else
-            echo "${REPO_NAME} exists"
+            # Repo exists
             gh repo clone "kosli-demo/${REPO_NAME}"
             mv "${REPO_NAME}"/.git /tmp
             gh repo clone kosli-demo/base
             cd base
             rm -rf .git
             mv /tmp/.git .
-            echo "${REPO_NAME} ${DATE_TIME}" > ./source/datetime.txt
+            timestamp="$(date +%s)"
+            echo "${REPO_NAME} ${timestamp}" > ./source/datetime.txt
             git add .
-            git commit --message "Simulated commit ${DATE_TIME}"
+            git commit --message "Simulated commit ${timestamp}"
             git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/${REPO_NAME}.git"
             git push
           fi
 
-      - name: Wait for workflow to be available
+      - name: Wait for repo workflow to be available
         run: |
           for i in $(seq 1 10); do
             if gh workflow view main.yml --repo "kosli-demo/${REPO_NAME}" > /dev/null 2>&1; then
@@ -96,8 +95,9 @@ jobs:
             fi
           done
 
-      - name: Trigger CI workflow in target repo, attesting to staging|prod|both
+      - name: Run CI workflow in target repo
         run: |
+          # Setup where triggered workflow will attest to
           case "${{ inputs.scope }}" in
             staging)
               KOSLI_HOST="https://staging.app.kosli.com"
@@ -115,12 +115,14 @@ jobs:
 
           BEFORE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
+          # Trigger the workflow, telling it where to attest to
           gh workflow run main.yml \
             --repo "kosli-demo/${REPO_NAME}" \
             --ref main \
             --field kosli_host="${KOSLI_HOST}" \
             --field kosli_api_token="${KOSLI_API_TOKEN}"
 
+          # Get id of workflow run
           for i in $(seq 1 12); do
             RUN_ID=$(gh run list \
               --repo "kosli-demo/${REPO_NAME}" \
@@ -140,6 +142,7 @@ jobs:
             fi
           done
 
+          # Wait for workflow run to finish
           gh run watch "${RUN_ID}" \
             --repo "kosli-demo/${REPO_NAME}" \
             --exit-status
