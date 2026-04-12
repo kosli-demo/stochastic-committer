@@ -23,6 +23,15 @@ on:
 jobs:
   commit-to-repo:
     if: ${{ inputs.selected }}
+    uses: ./.github/workflows/commit-to-repo.yml
+    with:
+      repo_name: ${{ inputs.repo_name }}
+    secrets:
+      CLONE_PUSH_REPOS: ${{ secrets.CLONE_PUSH_REPOS }}
+
+  run-ci:
+    needs: [commit-to-repo]
+    if: ${{ inputs.selected }}
     runs-on: ubuntu-latest
     env:
       REPO_NAME: ${{ inputs.repo_name }}
@@ -32,45 +41,6 @@ jobs:
         uses: step-security/harden-runner@v2
         with:
           egress-policy: audit
-
-      - name: Configure git
-        run: |
-          git config --global user.name "${{ github.actor }}"
-          git config --global user.email "${{ github.event.sender.login }}@users.noreply.github.com"
-
-      - name: Commit to repo
-        run: |
-          if ! gh repo view "kosli-demo/${REPO_NAME}" > /dev/null 2>&1; then
-            # Repo does not exist so create it
-            gh repo create "kosli-demo/${REPO_NAME}" --public
-
-            # Wait for repo creation to finish
-            for i in $(seq 1 10); do
-              if gh repo view "kosli-demo/${REPO_NAME}" > /dev/null 2>&1; then
-                break
-              fi
-              echo "Waiting for repo to be available (attempt ${i}/10)..."
-              sleep 10
-              if [ "${i}" -eq 10 ]; then
-                echo "Repo kosli-demo/${REPO_NAME} not available after 10 attempts"
-                exit 1
-              fi
-            done
-          fi
-          
-          # Commit latest copy of base
-          gh repo clone "kosli-demo/${REPO_NAME}"
-          mv "${REPO_NAME}"/.git /tmp
-          gh repo clone kosli-demo/base
-          cd base
-          rm -rf .git
-          mv /tmp/.git .
-          TIMESTAMP="$(date +%s)"
-          echo "${REPO_NAME} ${TIMESTAMP}" > ./source/datetime.txt
-          git add .
-          git commit --message "Simulated commit ${TIMESTAMP}"
-          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/${REPO_NAME}.git"
-          git push -u origin main
 
       - name: Wait for repo workflow to be available
         run: |

@@ -1,0 +1,43 @@
+name: Commit to repo
+
+on:
+  workflow_call:
+    inputs:
+      repo_name:
+        type: string
+        required: true
+    secrets:
+      CLONE_PUSH_REPOS:
+        required: true
+
+jobs:
+  commit-to-repo:
+    runs-on: ubuntu-latest
+    env:
+      REPO_NAME: ${{ inputs.repo_name }}
+      GH_TOKEN: ${{ secrets.CLONE_PUSH_REPOS }}
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+
+      - name: Configure git
+        run: |
+          git config --global user.name "${{ github.actor }}"
+          git config --global user.email "${{ github.event.sender.login }}@users.noreply.github.com"
+
+      - name: Commit to repo
+        run: |
+          gh repo clone "kosli-demo/${REPO_NAME}"
+          mv "${REPO_NAME}"/.git /tmp
+          gh repo clone kosli-demo/base
+          cd base
+          rm -rf .git
+          mv /tmp/.git .
+          TIMESTAMP="$(date +%s)"
+          echo "${REPO_NAME} ${TIMESTAMP}" > ./source/datetime.txt
+          git add .
+          git commit --message "Simulated commit"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/${REPO_NAME}.git"
+          git push -u origin main

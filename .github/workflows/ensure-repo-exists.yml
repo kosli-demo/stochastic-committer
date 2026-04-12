@@ -11,26 +11,23 @@ on:
         required: true
 
 jobs:
-  ensure-repo-exists:
+  check-and-create:
     runs-on: ubuntu-latest
     env:
       REPO_NAME: ${{ inputs.repo_name }}
       GH_TOKEN: ${{ secrets.CLONE_PUSH_REPOS }}
+    outputs:
+      was_created: ${{ steps.create.outputs.was_created }}
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@v2
         with:
           egress-policy: audit
 
-      - name: Configure git
-        run: |
-          git config --global user.name "${{ github.actor }}"
-          git config --global user.email "${{ github.event.sender.login }}@users.noreply.github.com"
-
-      - name: Ensure repo exists
+      - name: Create repo if it does not exist
+        id: create
         run: |
           if ! gh repo view "kosli-demo/${REPO_NAME}" > /dev/null 2>&1; then
-            # Repo does not exist so create it
             gh repo create "kosli-demo/${REPO_NAME}" --public
 
             # Wait for repo creation to finish
@@ -46,17 +43,16 @@ jobs:
               fi
             done
 
-            # Initialise with a clone of base
-            gh repo clone "kosli-demo/${REPO_NAME}"
-            mv "${REPO_NAME}"/.git /tmp
-            gh repo clone kosli-demo/base
-            cd base
-            rm -rf .git
-            mv /tmp/.git .
-            TIMESTAMP="$(date +%s)"
-            echo "${REPO_NAME} ${TIMESTAMP}" > ./source/datetime.txt
-            git add .
-            git commit --message "Initial commit"
-            git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/kosli-demo/${REPO_NAME}.git"
-            git push -u origin main
+            echo "was_created=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "was_created=false" >> "${GITHUB_OUTPUT}"
           fi
+
+  initialise:
+    needs: [check-and-create]
+    if: ${{ needs.check-and-create.outputs.was_created == 'true' }}
+    uses: ./.github/workflows/commit-to-repo.yml
+    with:
+      repo_name: ${{ inputs.repo_name }}
+    secrets:
+      CLONE_PUSH_REPOS: ${{ secrets.CLONE_PUSH_REPOS }}
