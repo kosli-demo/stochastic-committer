@@ -1,0 +1,18 @@
+name: Stochastic committer
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'  # Every 6 hours
+  workflow_dispatch: {}
+
+jobs:
+  run:
+    uses: ./.github/workflows/main.yml
+    with:
+      scope: both
+      repo_count: 30
+      repo_chance: 10
+    secrets:
+      CLONE_PUSH_REPOS: ${{ secrets.CLONE_PUSH_REPOS }}
+      KOSLI_API_TOKEN_STAGING: ${{ secrets.KOSLI_API_TOKEN_STAGING }}
+      KOSLI_API_TOKEN_PROD: ${{ secrets.KOSLI_API_TOKEN_PROD }}

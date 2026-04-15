@@ -1,9 +1,30 @@
 name: Simulate commits on many repos
 
 on:
-  # TODO: cant do cron like this as there is a choice input.
-  # schedule:
-  #   - cron: '0 */6 * * *'  # Every 6 hours
+  workflow_call:
+    inputs:
+      scope:
+        description: 'Where to attest to'
+        type: string
+        required: false
+        default: both
+      repo_count:
+        description: 'Number of demo repos to select'
+        type: number
+        required: false
+        default: 30
+      repo_chance:
+        description: '% chance each repo will get a commit+push'
+        type: number
+        required: false
+        default: 10
+    secrets:
+      CLONE_PUSH_REPOS:
+        required: true
+      KOSLI_API_TOKEN_STAGING:
+        required: true
+      KOSLI_API_TOKEN_PROD:
+        required: true
 
   workflow_dispatch:
     inputs:
