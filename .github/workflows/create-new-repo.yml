@@ -1,0 +1,48 @@
+name: Create new repo
+
+on:
+  workflow_call:
+    inputs:
+      repo_name:
+        type: string
+        required: true
+    secrets:
+      CLONE_PUSH_REPOS:
+        required: true
+
+jobs:
+  create:
+    runs-on: ubuntu-latest
+    env:
+      REPO_NAME: ${{ inputs.repo_name }}
+      GH_TOKEN: ${{ secrets.CLONE_PUSH_REPOS }}
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+
+      - name: Create repo
+        run: |
+          gh repo create "kosli-demo/${REPO_NAME}" --public
+
+          # Wait for repo creation to finish
+          for i in $(seq 1 10); do
+            if gh repo view "kosli-demo/${REPO_NAME}" > /dev/null 2>&1; then
+              break
+            fi
+            echo "Waiting for repo to be available (attempt ${i}/10)..."
+            sleep 10
+            if [ "${i}" -eq 10 ]; then
+              echo "Repo kosli-demo/${REPO_NAME} not available after 10 attempts"
+              exit 1
+            fi
+          done
+
+  initialise:
+    needs: [create]
+    uses: ./.github/workflows/commit-to-repo.yml
+    with:
+      repo_name: ${{ inputs.repo_name }}
+    secrets:
+      CLONE_PUSH_REPOS: ${{ secrets.CLONE_PUSH_REPOS }}

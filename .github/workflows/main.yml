@@ -1,6 +1,6 @@
 # Both matrix jobs are designed to avoid hitting GitHub's 256-job matrix limit:
 #
-# ensure-n-repos-exist fans out only over repos that do not yet exist on GitHub.
+# create-new-repos fans out only over repos that do not yet exist on GitHub.
 # On most runs all repos are already present, so the matrix is empty and the
 # job is skipped entirely.
 #
@@ -96,13 +96,13 @@ jobs:
           echo "non_existent_repos=${NON_EXISTENT_REPOS}" >> ${GITHUB_OUTPUT}
 
 
-  ensure-n-repos-exist:
+  create-new-repos:
     needs: [select-n-repos]
     if: ${{ needs.select-n-repos.outputs.non_existent_repos != '[]' }}
     strategy:
       matrix:
         include: ${{ fromJSON(needs.select-n-repos.outputs.non_existent_repos) }}
-    uses: ./.github/workflows/ensure-repo-exists.yml
+    uses: ./.github/workflows/create-new-repo.yml
     with:
       repo_name: ${{ matrix.repo_name }}
     secrets:
@@ -110,8 +110,8 @@ jobs:
 
 
   simulate-commits-to-selected-repos:
-    needs: [select-n-repos, ensure-n-repos-exist]
-    # !failure() && !cancelled() is required because ensure-n-repos-exist is skipped when all
+    needs: [select-n-repos, create-new-repos]
+    # !failure() && !cancelled() is required because create-new-repos is skipped when all
     # repos already exist. GitHub would otherwise propagate that skip to this job, preventing
     # commits even when repos are selected. This condition lets the job run as long as nothing
     # has actually failed or been cancelled.
@@ -133,7 +133,7 @@ jobs:
     needs: [select-n-repos, simulate-commits-to-selected-repos]
     # !failure() && !cancelled() is required for the same reason as on
     # simulate-commits-to-selected-repos: GitHub propagates skips transitively,
-    # so the skip of ensure-n-repos-exist would otherwise reach this job too.
+    # so the skip of create-new-repos would otherwise reach this job too.
     if: ${{ !failure() && !cancelled() }}
     runs-on: ubuntu-latest
     env:
