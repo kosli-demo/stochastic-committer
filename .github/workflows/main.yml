@@ -87,7 +87,7 @@ jobs:
         run: |
           URL=https://raw.githubusercontent.com/kosli-demo/base/refs/heads/main/data/all-repos.json
           curl --fail --output all_repos.json --silent "${URL}"
-          ./bin/select_repos.py all_repos.json ${REPO_COUNT} ${REPO_CHANCE} kosli-demo > n_repos.json
+          ./bin/select_repos.py all_repos.json ${REPO_COUNT} ${REPO_CHANCE} > n_repos.json
           N_REPOS="$(jq --compact-output . n_repos.json)"
           SELECTED_REPOS="$(jq --compact-output '[.[] | select(.selected == true)]' n_repos.json)"
           NON_EXISTENT_REPOS="$(jq --compact-output '[.[] | select(.exists == false)]' n_repos.json)"
@@ -109,8 +109,51 @@ jobs:
       CLONE_PUSH_REPOS: ${{ secrets.CLONE_PUSH_REPOS }}
 
 
-  simulate-commits-to-selected-repos:
+  # mark-new-repos-as-existing keeps the exists field in all-repos.json accurate
+  # by flipping exists to true for any repo that was just created. This caching
+  # avoids two problems that arose when select_repos.py checked existence via the
+  # GitHub API on every run: (1) rate limiting at high repo counts, and (2) ~100s
+  # of sequential HTTPS calls to check 500 repos one by one.
+  mark-new-repos-as-existing:
     needs: [select-n-repos, create-new-repos]
+    if: ${{ !failure() && !cancelled() && needs.select-n-repos.outputs.non_existent_repos != '[]' }}
+    runs-on: ubuntu-latest
+    env:
+      NON_EXISTENT_REPOS: ${{ needs.select-n-repos.outputs.non_existent_repos }}
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+
+      - name: Configure git
+        run: |
+          git config --global user.name "${{ github.actor }}"
+          git config --global user.email "${{ github.event.sender.login }}@users.noreply.github.com"
+
+      - uses: actions/checkout@v6
+        with:
+          repository: kosli-demo/base
+          token: ${{ secrets.CLONE_PUSH_REPOS }}
+
+      - name: Mark newly created repos as existing in all-repos.json
+        run: |
+          echo "${NON_EXISTENT_REPOS}" | jq --raw-output '.[].repo_name' | while read -r REPO_NAME; do
+            jq --arg name "${REPO_NAME}" \
+              '(.[] | select(.repo_name == $name) | .exists) |= true' \
+              data/all-repos.json > tmp.json
+            mv tmp.json data/all-repos.json
+          done
+
+      - name: Commit and push
+        run: |
+          git add data/all-repos.json
+          git commit --message "Mark newly created repos as existing"
+          git push
+
+
+  simulate-commits-to-selected-repos:
+    needs: [select-n-repos, create-new-repos, mark-new-repos-as-existing]
     # !failure() && !cancelled() is required because create-new-repos is skipped when all
     # repos already exist. GitHub would otherwise propagate that skip to this job, preventing
     # commits even when repos are selected. This condition lets the job run as long as nothing
