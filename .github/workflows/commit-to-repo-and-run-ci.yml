@@ -1,4 +1,4 @@
-name: Commit to repo if selected
+name: Commit to repo and run CI
 
 on:
   workflow_call:
@@ -8,9 +8,6 @@ on:
         required: true
       repo_name:
         type: string
-        required: true
-      selected:
-        type: boolean
         required: true
     secrets:
       CLONE_PUSH_REPOS:
@@ -22,7 +19,6 @@ on:
 
 jobs:
   commit-to-repo:
-    if: ${{ inputs.selected }}
     uses: ./.github/workflows/commit-to-repo.yml
     with:
       repo_name: ${{ inputs.repo_name }}
@@ -31,7 +27,6 @@ jobs:
 
   run-ci:
     needs: [commit-to-repo]
-    if: ${{ inputs.selected }}
     runs-on: ubuntu-latest
     env:
       REPO_NAME: ${{ inputs.repo_name }}

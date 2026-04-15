@@ -1,3 +1,9 @@
+# The simulate-commits-to-selected-repos matrix runs only over repos that were
+# randomly selected for a commit (a subset of the N repos passed to
+# ensure-n-repos-exist). This is intentional: fanning out over all N repos
+# regardless of selection would waste jobs, and with a large enough N could
+# hit GitHub's 256-job matrix limit.
+
 name: Simulate commits on many repos
 
 on:
@@ -59,6 +65,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       n_repos: ${{ steps.set-repos.outputs.n_repos }}
+      selected_repos: ${{ steps.set-repos.outputs.selected_repos }}
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@v2
@@ -74,7 +81,9 @@ jobs:
           curl --fail --output all_repos.json --silent "${URL}"
           ./bin/select_repos.py all_repos.json ${REPO_COUNT} ${REPO_CHANCE} > n_repos.json
           N_REPOS="$(jq --compact-output . n_repos.json)"
+          SELECTED_REPOS="$(jq --compact-output '[.[] | select(.selected == true)]' n_repos.json)"
           echo "n_repos=${N_REPOS}" >> ${GITHUB_OUTPUT}
+          echo "selected_repos=${SELECTED_REPOS}" >> ${GITHUB_OUTPUT}
 
 
   ensure-n-repos-exist:
@@ -92,15 +101,14 @@ jobs:
 
   simulate-commits-to-selected-repos:
     needs: [select-n-repos, ensure-n-repos-exist]
-    if: ${{ needs.select-n-repos.outputs.n_repos != '[]' }}
+    if: ${{ needs.select-n-repos.outputs.selected_repos != '[]' }}
     strategy:
       matrix:
-        include: ${{ fromJSON(needs.select-n-repos.outputs.n_repos) }}
-    uses: ./.github/workflows/commit-to-repo-if-selected.yml
+        include: ${{ fromJSON(needs.select-n-repos.outputs.selected_repos) }}
+    uses: ./.github/workflows/commit-to-repo-and-run-ci.yml
     with:
       scope: ${{ inputs.scope }}
       repo_name: ${{ matrix.repo_name }}
-      selected: ${{ matrix.selected }}
     secrets:
       CLONE_PUSH_REPOS: ${{ secrets.CLONE_PUSH_REPOS }}
       KOSLI_API_TOKEN_STAGING: ${{ secrets.KOSLI_API_TOKEN_STAGING }}
