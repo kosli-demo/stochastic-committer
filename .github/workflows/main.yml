@@ -129,8 +129,12 @@ jobs:
       KOSLI_API_TOKEN_PROD: ${{ secrets.KOSLI_API_TOKEN_PROD }}
 
 
-  simulate-deployments-from-some-repos:
+  simulate-deployments-from-selected-repos:
     needs: [select-n-repos, simulate-commits-to-selected-repos]
+    # !failure() && !cancelled() is required for the same reason as on
+    # simulate-commits-to-selected-repos: GitHub propagates skips transitively,
+    # so the skip of ensure-n-repos-exist would otherwise reach this job too.
+    if: ${{ !failure() && !cancelled() }}
     runs-on: ubuntu-latest
     env:
       N_REPOS: ${{ needs.select-n-repos.outputs.n_repos }}
