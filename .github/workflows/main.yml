@@ -1,8 +1,13 @@
-# The simulate-commits-to-selected-repos matrix runs only over repos that were
-# randomly selected for a commit (a subset of the N repos passed to
-# ensure-n-repos-exist). This is intentional: fanning out over all N repos
-# regardless of selection would waste jobs, and with a large enough N could
-# hit GitHub's 256-job matrix limit.
+# Both matrix jobs are designed to avoid hitting GitHub's 256-job matrix limit:
+#
+# ensure-n-repos-exist fans out only over repos that do not yet exist on GitHub.
+# On most runs all repos are already present, so the matrix is empty and the
+# job is skipped entirely.
+#
+# simulate-commits-to-selected-repos fans out only over repos that were randomly
+# selected for a commit this run (typically a small fraction of N). Fanning out
+# over all N repos regardless of selection would waste jobs and, with a large
+# enough N, could hit the limit.
 
 name: Simulate commits on many repos
 
@@ -66,6 +71,7 @@ jobs:
     outputs:
       n_repos: ${{ steps.set-repos.outputs.n_repos }}
       selected_repos: ${{ steps.set-repos.outputs.selected_repos }}
+      non_existent_repos: ${{ steps.set-repos.outputs.non_existent_repos }}
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@v2
@@ -76,22 +82,26 @@ jobs:
 
       - name: Select repo names
         id: set-repos
+        env:
+          GH_TOKEN: ${{ secrets.CLONE_PUSH_REPOS }}
         run: |
           URL=https://raw.githubusercontent.com/kosli-demo/base/refs/heads/main/data/all-repos.json
           curl --fail --output all_repos.json --silent "${URL}"
-          ./bin/select_repos.py all_repos.json ${REPO_COUNT} ${REPO_CHANCE} > n_repos.json
+          ./bin/select_repos.py all_repos.json ${REPO_COUNT} ${REPO_CHANCE} kosli-demo > n_repos.json
           N_REPOS="$(jq --compact-output . n_repos.json)"
           SELECTED_REPOS="$(jq --compact-output '[.[] | select(.selected == true)]' n_repos.json)"
+          NON_EXISTENT_REPOS="$(jq --compact-output '[.[] | select(.exists == false)]' n_repos.json)"
           echo "n_repos=${N_REPOS}" >> ${GITHUB_OUTPUT}
           echo "selected_repos=${SELECTED_REPOS}" >> ${GITHUB_OUTPUT}
+          echo "non_existent_repos=${NON_EXISTENT_REPOS}" >> ${GITHUB_OUTPUT}
 
 
   ensure-n-repos-exist:
     needs: [select-n-repos]
-    if: ${{ needs.select-n-repos.outputs.n_repos != '[]' }}
+    if: ${{ needs.select-n-repos.outputs.non_existent_repos != '[]' }}
     strategy:
       matrix:
-        include: ${{ fromJSON(needs.select-n-repos.outputs.n_repos) }}
+        include: ${{ fromJSON(needs.select-n-repos.outputs.non_existent_repos) }}
     uses: ./.github/workflows/ensure-repo-exists.yml
     with:
       repo_name: ${{ matrix.repo_name }}
@@ -101,7 +111,11 @@ jobs:
 
   simulate-commits-to-selected-repos:
     needs: [select-n-repos, ensure-n-repos-exist]
-    if: ${{ needs.select-n-repos.outputs.selected_repos != '[]' }}
+    # !failure() && !cancelled() is required because ensure-n-repos-exist is skipped when all
+    # repos already exist. GitHub would otherwise propagate that skip to this job, preventing
+    # commits even when repos are selected. This condition lets the job run as long as nothing
+    # has actually failed or been cancelled.
+    if: ${{ !failure() && !cancelled() && needs.select-n-repos.outputs.selected_repos != '[]' }}
     strategy:
       matrix:
         include: ${{ fromJSON(needs.select-n-repos.outputs.selected_repos) }}
