@@ -1,6 +1,9 @@
 name: Simulate commits on many repos
 
 on:
+  schedule:
+    - cron: '0 */6 * * *'  # Every 6 hours
+
   workflow_dispatch:
     inputs:
       scope:
@@ -14,15 +17,11 @@ on:
       repo_count:
         description: 'Number of demo repos to select'
         required: false
-        default: 20
+        default: 30
       repo_chance:
         description: '% chance each repo will get a commit+push'
         required: false
         default: 10
-
-  #schedule: 
-  #  - cron: '* * * * *'   # Every 5 minutes (max)
-  #  - cron: '* 10 * * *'  # Every 10 minutes
 
 env:
   KOSLI_ORG: ${{ vars.KOSLI_ORG }}
