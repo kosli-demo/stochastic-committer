@@ -90,7 +90,10 @@ jobs:
           ./bin/select_repos.py all_repos.json ${REPO_COUNT} ${REPO_CHANCE} > n_repos.json
           N_REPOS="$(jq --compact-output . n_repos.json)"
           SELECTED_REPOS="$(jq --compact-output '[.[] | select(.selected == true)]' n_repos.json)"
-          NON_EXISTENT_REPOS="$(echo "${SELECTED_REPOS}" | jq --compact-output '[.[] | select(.exists == false)]')"
+          # Must filter from n_repos.json (all N repos), not SELECTED_REPOS.
+          # simulate-deployments-from-selected-repos snapshots all N repos, so all
+          # N repos must exist before it runs -- not just the ones selected for a commit.
+          NON_EXISTENT_REPOS="$(jq --compact-output '[.[] | select(.exists == false)]' n_repos.json)"
           echo "n_repos=${N_REPOS}" >> ${GITHUB_OUTPUT}
           echo "selected_repos=${SELECTED_REPOS}" >> ${GITHUB_OUTPUT}
           echo "non_existent_repos=${NON_EXISTENT_REPOS}" >> ${GITHUB_OUTPUT}
@@ -100,6 +103,9 @@ jobs:
     needs: [select-n-repos]
     if: ${{ needs.select-n-repos.outputs.non_existent_repos != '[]' }}
     strategy:
+      # Limit concurrency to avoid hitting GitHub API secondary rate limits
+      # when a large jump in repo_count causes many repos to be created at once.
+      max-parallel: 5
       matrix:
         include: ${{ fromJSON(needs.select-n-repos.outputs.non_existent_repos) }}
     uses: ./.github/workflows/create-new-repo.yml
@@ -198,7 +204,7 @@ jobs:
             REPO_NAME="$(echo "${entry}" | jq --raw-output '.repo_name')"
             github=https://raw.githubusercontent.com
             URL="${github}/kosli-demo/${REPO_NAME}/refs/heads/main/source/datetime.txt"
-            curl --fail --output "${REPO_NAME}.txt" --silent "${URL}"
+            curl --fail --output "${REPO_NAME}.txt" --show-error --silent "${URL}"
             TIMESTAMP="$(cut -d' ' -f2 "${REPO_NAME}.txt")"
             touch -d "@${TIMESTAMP}" "${REPO_NAME}.txt"
           done
