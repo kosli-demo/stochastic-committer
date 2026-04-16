@@ -9,9 +9,9 @@ jobs:
   run:
     uses: ./.github/workflows/main.yml
     with:
-      scope: both
-      repo_count: 30
-      repo_chance: 10
+      scope: staging
+      repo_count: 100
+      repo_chance: 5
     secrets:
       CLONE_PUSH_REPOS: ${{ secrets.CLONE_PUSH_REPOS }}
       KOSLI_API_TOKEN_STAGING: ${{ secrets.KOSLI_API_TOKEN_STAGING }}
