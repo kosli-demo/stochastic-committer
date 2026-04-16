@@ -90,7 +90,7 @@ jobs:
           ./bin/select_repos.py all_repos.json ${REPO_COUNT} ${REPO_CHANCE} > n_repos.json
           N_REPOS="$(jq --compact-output . n_repos.json)"
           SELECTED_REPOS="$(jq --compact-output '[.[] | select(.selected == true)]' n_repos.json)"
-          NON_EXISTENT_REPOS="$(jq --compact-output '[.[] | select(.exists == false)]' n_repos.json)"
+          NON_EXISTENT_REPOS="$(jq --compact-output '[.[] | select(.exists == false and .selected == true)]' n_repos.json)"
           echo "n_repos=${N_REPOS}" >> ${GITHUB_OUTPUT}
           echo "selected_repos=${SELECTED_REPOS}" >> ${GITHUB_OUTPUT}
           echo "non_existent_repos=${NON_EXISTENT_REPOS}" >> ${GITHUB_OUTPUT}
