@@ -10,7 +10,7 @@ jobs:
     uses: ./.github/workflows/main.yml
     with:
       scope: staging
-      repo_count: 100
+      repo_count: 200
       repo_chance: 5
     secrets:
       CLONE_PUSH_REPOS: ${{ secrets.CLONE_PUSH_REPOS }}
