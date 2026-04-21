@@ -1,4 +1,4 @@
-# ADR 001 - Avoiding GitHub Actions matrix and API rate limits
+# ADR 001 - Avoiding Large GitHub Actions matrix and API rate limits
 
 ## Status
 
