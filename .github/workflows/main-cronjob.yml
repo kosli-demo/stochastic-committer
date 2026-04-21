@@ -7,7 +7,7 @@ on:
 
 jobs:
   run:
-    uses: ./.github/workflows/main.yml
+    uses: ./.github/workflows/stochastic-committer.yml
     with:
       scope: staging
       repo_count: 200
