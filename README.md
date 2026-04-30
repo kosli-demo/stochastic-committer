@@ -7,8 +7,8 @@ Aim is to provide:
 
 ## How it works
 
-Each `.github/workflows/committer.yml` run (scheduled every 6 hours) calls
-`.github/workflows/main.yml`, which:
+Each `.github/workflows/main-cronjob.yml` run (scheduled every 6 hours) calls
+`.github/workflows/stochastic-committer.yml`, which:
 
 1. Selects the first `repo_count` repos from
    [kosli-demo/base](https://github.com/kosli-demo/base)'s `data/all-repos.json`.
