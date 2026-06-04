@@ -7,3 +7,6 @@ with the following permissions:
 repo:
 workflow:
 admin:org 
+read:packages
+
+expires Aug 2nd 2026

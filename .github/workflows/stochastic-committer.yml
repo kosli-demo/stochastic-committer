@@ -240,6 +240,8 @@ jobs:
         env:
           KOSLI_HOST: https://app.kosli.com
           KOSLI_API_TOKEN: ${{ secrets.KOSLI_API_TOKEN_PROD }}
+        # There is only one fake environment, named "staging". We report it twice:
+        # once to https://staging.app.kosli.com and once to https://app.kosli.com.
         run:
           kosli snapshot paths staging
             --paths-file paths.yml
