@@ -183,6 +183,9 @@ jobs:
     with:
       scope: ${{ inputs.scope }}
       repo_name: ${{ matrix.repo_name }}
+      # Lets run-ci skip the workflow-availability poll for repos that already exist
+      # (only newly-created repos need it), cutting GitHub API calls per leg.
+      exists: ${{ matrix.exists }}
     secrets:
       CLONE_PUSH_REPOS: ${{ secrets.CLONE_PUSH_REPOS }}
       KOSLI_API_TOKEN_STAGING: ${{ secrets.KOSLI_API_TOKEN_STAGING }}

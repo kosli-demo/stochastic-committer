@@ -9,6 +9,14 @@ on:
       repo_name:
         type: string
         required: true
+      exists:
+        description: 'Did the repo already exist at the start of this run? false = created this run'
+        type: boolean
+        required: false
+        # Conservative default: if the caller does not say, assume the repo may be
+        # newly created and poll for its workflow (extra calls, but never skips a
+        # wait that a genuinely-new repo needs).
+        default: false
     secrets:
       CLONE_PUSH_REPOS:
         required: true
@@ -38,9 +46,17 @@ jobs:
           egress-policy: audit
 
       - name: Wait for repo workflow to be available
+        # Only newly-created repos (exists == false) need this poll -- their main.yml
+        # may not be registered yet. Repos that already existed always have the
+        # workflow, so polling them just burns GitHub API rate-limit budget: the shared
+        # CLONE_PUSH_REPOS token has a 5000-request/hour primary limit across all matrix
+        # legs, and a large fan-out exhausts it (HTTP 403), failing legs whose CI is fine.
+        if: ${{ !inputs.exists }}
         run: |
           for i in $(seq 1 10); do
-            if gh workflow view main.yml --repo "kosli-demo/${REPO_NAME}" > /dev/null 2>&1; then
+            # Redirect stdout only -- keep stderr so a real API error (e.g. HTTP 403
+            # rate limit) shows in the log instead of masquerading as "workflow not found".
+            if gh workflow view main.yml --repo "kosli-demo/${REPO_NAME}" > /dev/null; then
               break
             fi
             echo "Waiting for workflow to be available (attempt ${i}/10)..."
@@ -98,7 +114,11 @@ jobs:
             fi
           done
 
-          # Wait for workflow run to finish
+          # Wait for workflow run to finish. --interval 30 (default is 3) cuts the
+          # number of status polls ~10x. At 3s, a multi-minute run is 40-60 polls, and
+          # across many matrix legs sharing one token that loop is the dominant consumer
+          # of the 5000-request/hour rate limit.
           gh run watch "${RUN_ID}" \
             --repo "kosli-demo/${REPO_NAME}" \
+            --interval 30 \
             --exit-status
