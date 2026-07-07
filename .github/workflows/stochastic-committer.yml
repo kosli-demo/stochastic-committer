@@ -44,8 +44,8 @@ on:
         type: choice
         required: true
         options:
-          - staging
           - prod
+          - staging
           - both
       repo_count:
         description: 'Number of demo repos to select'
