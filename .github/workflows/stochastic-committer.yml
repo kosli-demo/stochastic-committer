@@ -168,6 +168,15 @@ jobs:
     # has actually failed or been cancelled.
     if: ${{ !failure() && !cancelled() && needs.select-n-repos.outputs.selected_repos != '[]' }}
     strategy:
+      # fail-fast: false so one repo's failing CI run does not cancel the sibling matrix
+      # legs. Each selected repo commits + runs its CI independently; a failure in one
+      # leaves the others free to finish and attest their own provenance. Without this,
+      # the default fail-fast: true would cancel every in-flight leg on the first failure.
+      fail-fast: false
+      # max-parallel throttles the fan-out. Hundreds of legs each doing `gh workflow run`
+      # + `gh run watch` can trip GitHub's secondary rate limits, which would itself
+      # manufacture the CI failures we are trying to survive.
+      max-parallel: 20
       matrix:
         include: ${{ fromJSON(needs.select-n-repos.outputs.selected_repos) }}
     uses: ./.github/workflows/commit-to-repo-and-run-ci.yml
@@ -182,10 +191,18 @@ jobs:
 
   simulate-deployments-from-selected-repos:
     needs: [select-n-repos, simulate-commits-to-selected-repos]
-    # !failure() && !cancelled() is required for the same reason as on
-    # simulate-commits-to-selected-repos: GitHub propagates skips transitively,
-    # so the skip of create-new-repos would otherwise reach this job too.
-    if: ${{ !failure() && !cancelled() }}
+    # `needs` keeps the ordering edge: this job still waits for every commit/CI leg to
+    # finish before snapshotting, so it never reads a repo's datetime.txt before the CI
+    # run that attests it has completed. The `if` only relaxes the *success* requirement:
+    #
+    #   - always() lets the snapshot run even when some commit legs failed. With
+    #     fail-fast: false above, a partial failure must no longer discard the whole
+    #     snapshot -- the repos whose CI succeeded still get their matching provenance,
+    #     and any that failed show up honestly as non-compliant in the environment.
+    #
+    #   - gating on select-n-repos success avoids snapshotting nothing: if repo
+    #     selection itself failed, N_REPOS is empty and there is nothing to report.
+    if: ${{ always() && needs.select-n-repos.result == 'success' }}
     runs-on: ubuntu-latest
     env:
       N_REPOS: ${{ needs.select-n-repos.outputs.n_repos }}
