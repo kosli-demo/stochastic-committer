@@ -18,7 +18,7 @@
 # Not meant to be dispatched directly; use demo-deploy-rogue.yml (go rogue) and
 # demo-reset-to-green.yml (reset).
 
-name: Demo snapshot (reusable workflow)
+name: Reusable workflow for demo
 
 on:
   workflow_call:
