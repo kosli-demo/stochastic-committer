@@ -1,39 +1,25 @@
 # DEMO part 2: reset the environment back to compliant.
 #
 # Snapshots the fake "staging" environment with the whole fleet using every
-# repo's REAL (already-attested) artifact file -- no repo is mutated -- so the
-# artifact previously shown with no provenance is replaced by a properly
-# attested one and the environment goes back to green.
+# repo's REAL (already-attested) artifact file and no rogue artifact, so the
+# artifact previously shown with no provenance is gone and the environment goes
+# back to green.
 #
 # This is the cheap, targeted reset: it re-harvests the fleet's files and
-# snapshots, with no repo_count/repo_chance commit+CI fan-out.
+# snapshots, with no repo_count/repo_chance commit+CI fan-out. scope is
+# hard-wired to prod (same environment as demo-deploy-rogue.yml).
 
 name: Demo - reset environment to green
 
 on:
-  workflow_dispatch:
-    inputs:
-      scope:
-        description: 'Where to attest to'
-        type: choice
-        required: true
-        default: prod
-        options:
-          - prod
-          - staging
-          - both
-      repo_count:
-        description: 'Number of demo repos to snapshot (must match the cron)'
-        type: string
-        required: false
-        default: '200'
+  workflow_dispatch: {}
 
 jobs:
   reset-to-green:
     uses: ./.github/workflows/demo-snapshot.yml
     with:
-      scope: ${{ inputs.scope }}
-      repo_count: ${{ inputs.repo_count }}
+      scope: prod
+      repo_count: '200'
       # Empty string = no rogue artifact -- snapshot only the real, attested fleet.
       rogue_artifact: ''
     secrets:
