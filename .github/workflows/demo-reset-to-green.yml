@@ -1,0 +1,41 @@
+# DEMO part 2: reset the environment back to compliant.
+#
+# Snapshots the fake "staging" environment with the whole fleet using every
+# repo's REAL (already-attested) artifact file -- no repo is mutated -- so the
+# artifact previously shown with no provenance is replaced by a properly
+# attested one and the environment goes back to green.
+#
+# This is the cheap, targeted reset: it re-harvests the fleet's files and
+# snapshots, with no repo_count/repo_chance commit+CI fan-out.
+
+name: Demo - reset environment to green
+
+on:
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: 'Where to attest to'
+        type: choice
+        required: true
+        default: prod
+        options:
+          - prod
+          - staging
+          - both
+      repo_count:
+        description: 'Number of demo repos to snapshot (must match the cron)'
+        type: string
+        required: false
+        default: '200'
+
+jobs:
+  reset-to-green:
+    uses: ./.github/workflows/demo-snapshot.yml
+    with:
+      scope: ${{ inputs.scope }}
+      repo_count: ${{ inputs.repo_count }}
+      # Empty string = no rogue artifact -- snapshot only the real, attested fleet.
+      rogue_artifact: ''
+    secrets:
+      KOSLI_API_TOKEN_STAGING: ${{ secrets.KOSLI_API_TOKEN_STAGING }}
+      KOSLI_API_TOKEN_PROD: ${{ secrets.KOSLI_API_TOKEN_PROD }}

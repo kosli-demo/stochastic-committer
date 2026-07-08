@@ -1,0 +1,127 @@
+# Reusable engine for the two-part "rogue deployment" demo.
+#
+# It rebuilds the fake "staging" environment from scratch by harvesting the
+# first `repo_count` repos (the same fleet the steady-state stochastic-committer
+# snapshot maintains -- select_repos.py takes json_data[:n]) and snapshotting
+# them to Kosli. A Kosli environment snapshot is a COMPLETE replacement, so the
+# set listed here becomes the entire environment.
+#
+# If `rogue_artifact` is set, one EXTRA artifact of that name is added to the
+# snapshot, backed by a file whose fingerprint was never attested to any flow.
+# The name need not be a real repo -- provenance is keyed by fingerprint, not by
+# name -- so an invented name like "rogue-trader" shows up as an artifact with no
+# provenance, making the environment non-compliant. Leave `rogue_artifact` empty
+# to snapshot only the real (already-attested) fleet, which is the steady state
+# and returns the environment to compliant (the extra artifact simply vanishes,
+# since the snapshot fully replaces the environment).
+#
+# Not meant to be dispatched directly; use demo-deploy-rogue.yml (go rogue) and
+# demo-reset-to-green.yml (reset).
+
+name: Demo snapshot (rogue or reset)
+
+on:
+  workflow_call:
+    inputs:
+      scope:
+        description: 'Where to attest to: staging, prod, or both'
+        type: string
+        required: false
+        default: prod
+      repo_count:
+        description: 'Number of demo repos to snapshot (must match the cron)'
+        type: string
+        required: false
+        default: '200'
+      rogue_artifact:
+        description: 'Name of an extra no-provenance artifact to add (need not be a real repo). Empty string = none (reset to green).'
+        type: string
+        # Required (no default): both callers pass it explicitly -- a name to go
+        # rogue, or an empty string to reset. Forcing the choice avoids silently
+        # snapshotting green when a caller forgets to set it.
+        required: true
+    secrets:
+      KOSLI_API_TOKEN_STAGING:
+        required: true
+      KOSLI_API_TOKEN_PROD:
+        required: true
+
+env:
+  KOSLI_ORG: ${{ vars.KOSLI_ORG }}
+  KOSLI_DEBUG: ${{ vars.KOSLI_DEBUG }}
+  KOSLI_DRY_RUN: ${{ vars.KOSLI_DRY_RUN }}
+  REPO_COUNT: ${{ inputs.repo_count }}
+  ROGUE_ARTIFACT: ${{ inputs.rogue_artifact }}
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+
+      - name: Setup Kosli CLI
+        uses: kosli-dev/setup-cli-action@v5
+        with:
+          version: ${{ vars.KOSLI_CLI_VERSION }}
+
+      - name: Harvest fleet files, adding rogue_artifact if set
+        # curl hits raw.githubusercontent.com, a CDN serving static files with no
+        # per-token rate limits, so fetching hundreds sequentially is fine.
+        run: |
+          URL=https://raw.githubusercontent.com/kosli-demo/base/refs/heads/main/data/all-repos.json
+          curl --fail --output all_repos.json --show-error --silent "${URL}"
+
+          # First repo_count repo names = the same fleet the steady-state snapshot
+          # maintains (select_repos.py takes json_data[:n]).
+          jq --raw-output ".[:${REPO_COUNT}] | .[].repo_name" all_repos.json > artifact_names.txt
+
+          github=https://raw.githubusercontent.com
+          while read -r REPO_NAME; do
+            url="${github}/kosli-demo/${REPO_NAME}/refs/heads/main/source/datetime.txt"
+            curl --fail --output "${REPO_NAME}.txt" --show-error --silent "${url}"
+            TIMESTAMP="$(cut -d' ' -f2 "${REPO_NAME}.txt")"
+            touch -d "@${TIMESTAMP}" "${REPO_NAME}.txt"
+          done < artifact_names.txt
+
+          # If a rogue artifact was requested, add ONE extra artifact of that name,
+          # backed by fixed content whose sha256 fingerprint was never attested to
+          # any flow, so it appears in the environment with no provenance. The name
+          # need not be a real repo.
+          if [ -n "${ROGUE_ARTIFACT}" ]; then
+            printf 'ROGUE ARTIFACT - deployed with no provenance (demo)\n' > "${ROGUE_ARTIFACT}.txt"
+            echo "${ROGUE_ARTIFACT}" >> artifact_names.txt
+          fi
+
+      - name: Create a Kosli --paths-file for the harvested files
+        run: |
+          {
+            echo "version: 1"
+            echo "artifacts:"
+            while read -r ARTIFACT_NAME; do
+              echo "  ${ARTIFACT_NAME}:"
+              echo "    path: ${ARTIFACT_NAME}.txt"
+            done < artifact_names.txt
+          } > paths.yml
+
+      - name: Kosli snapshot paths to staging
+        if: ${{ inputs.scope == 'staging' || inputs.scope == 'both' }}
+        env:
+          KOSLI_HOST: https://staging.app.kosli.com
+          KOSLI_API_TOKEN: ${{ secrets.KOSLI_API_TOKEN_STAGING }}
+        run:
+          kosli snapshot paths staging
+            --paths-file paths.yml
+
+      - name: Kosli snapshot paths to prod
+        if: ${{ inputs.scope == 'prod' || inputs.scope == 'both' }}
+        env:
+          KOSLI_HOST: https://app.kosli.com
+          KOSLI_API_TOKEN: ${{ secrets.KOSLI_API_TOKEN_PROD }}
+        # There is only one fake environment, named "staging". We report it twice:
+        # once to https://staging.app.kosli.com and once to https://app.kosli.com.
+        run:
+          kosli snapshot paths staging
+            --paths-file paths.yml

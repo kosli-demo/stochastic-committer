@@ -1,0 +1,48 @@
+# DEMO part 1: deploy a single artifact with no provenance.
+#
+# Snapshots the fake "staging" environment with the whole fleet plus ONE extra
+# artifact (default rogue-trader) that has no provenance, so the environment goes
+# non-compliant. The extra artifact need not be a real repo. Run
+# demo-reset-to-green.yml afterwards to remove it and restore compliance.
+#
+# IMPORTANT: with scope=prod (the default) this targets the same environment on
+# https://app.kosli.com that the 6-hourly main-cronjob re-snapshots with the
+# REAL (unmutated) files. If the cron fires while you are showing the rogue
+# state it will silently reset the environment to green. Pause the schedule in
+# main-cronjob.yml (or disable the workflow in the Actions UI) before the demo.
+
+name: Demo - deploy rogue artifact (no provenance)
+
+on:
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: 'Where to attest to'
+        type: choice
+        required: true
+        default: prod
+        options:
+          - prod
+          - staging
+          - both
+      rogue_artifact:
+        description: 'Name of the no-provenance artifact to deploy (need not be a real repo)'
+        type: string
+        required: false
+        default: rogue-trader
+      repo_count:
+        description: 'Number of demo repos to snapshot (must match the cron)'
+        type: string
+        required: false
+        default: '200'
+
+jobs:
+  deploy-rogue:
+    uses: ./.github/workflows/demo-snapshot.yml
+    with:
+      scope: ${{ inputs.scope }}
+      repo_count: ${{ inputs.repo_count }}
+      rogue_artifact: ${{ inputs.rogue_artifact }}
+    secrets:
+      KOSLI_API_TOKEN_STAGING: ${{ secrets.KOSLI_API_TOKEN_STAGING }}
+      KOSLI_API_TOKEN_PROD: ${{ secrets.KOSLI_API_TOKEN_PROD }}

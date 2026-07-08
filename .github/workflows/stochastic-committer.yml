@@ -69,7 +69,6 @@ jobs:
     needs: []
     runs-on: ubuntu-latest
     outputs:
-      n_repos: ${{ steps.set-repos.outputs.n_repos }}
       selected_repos: ${{ steps.set-repos.outputs.selected_repos }}
       non_existent_repos: ${{ steps.set-repos.outputs.non_existent_repos }}
     steps:
@@ -88,7 +87,6 @@ jobs:
           URL=https://raw.githubusercontent.com/kosli-demo/base/refs/heads/main/data/all-repos.json
           curl --fail --output all_repos.json --silent "${URL}"
           ./bin/select_repos.py all_repos.json ${REPO_COUNT} ${REPO_CHANCE} > n_repos.json
-          N_REPOS="$(jq --compact-output . n_repos.json)"
           SELECTED_REPOS="$(jq --compact-output '[.[] | select(.selected == true)]' n_repos.json)"
 
           # Must set non-existent-repos from n_repos.json (all N repos), not SELECTED_REPOS.
@@ -96,7 +94,6 @@ jobs:
           # N repos must exist before it runs -- not just the ones selected for a commit.
           NON_EXISTENT_REPOS="$(jq --compact-output '[.[] | select(.exists == false)]' n_repos.json)"
           
-          echo "n_repos=${N_REPOS}" >> ${GITHUB_OUTPUT}
           echo "selected_repos=${SELECTED_REPOS}" >> ${GITHUB_OUTPUT}
           echo "non_existent_repos=${NON_EXISTENT_REPOS}" >> ${GITHUB_OUTPUT}
 
@@ -204,64 +201,19 @@ jobs:
     #     and any that failed show up honestly as non-compliant in the environment.
     #
     #   - gating on select-n-repos success avoids snapshotting nothing: if repo
-    #     selection itself failed, N_REPOS is empty and there is nothing to report.
+    #     selection itself failed there is no fleet to report.
+    #
+    # The harvest + paths-file + snapshot logic lives in the reusable demo-snapshot.yml,
+    # shared with the rogue-deployment demo. It re-derives the first repo_count repos from
+    # all-repos.json (the same json_data[:n] slice select_repos.py uses) rather than
+    # consuming this run's N_REPOS. rogue_artifact is empty so only the real,
+    # attested fleet is snapshotted.
     if: ${{ always() && needs.select-n-repos.result == 'success' }}
-    runs-on: ubuntu-latest
-    env:
-      N_REPOS: ${{ needs.select-n-repos.outputs.n_repos }}
-    steps:
-      - name: Harden Runner
-        uses: step-security/harden-runner@v2
-        with:
-          egress-policy: audit
-
-      - name: Setup Kosli CLI
-        uses: kosli-dev/setup-cli-action@v5
-        with:
-          version: ${{ vars.KOSLI_CLI_VERSION }}
-
-      - name: Create N files ready for kosli snapshot paths
-        # curl hits raw.githubusercontent.com which is a CDN serving static files.
-        # Unlike the GitHub REST API it has no per-token rate limits, so fetching
-        # hundreds of files sequentially is not a concern.
-        run: |
-          echo "${N_REPOS}" | jq --compact-output '.[]' | while read -r entry; do
-            REPO_NAME="$(echo "${entry}" | jq --raw-output '.repo_name')"
-            github=https://raw.githubusercontent.com
-            URL="${github}/kosli-demo/${REPO_NAME}/refs/heads/main/source/datetime.txt"
-            curl --fail --output "${REPO_NAME}.txt" --show-error --silent "${URL}"
-            TIMESTAMP="$(cut -d' ' -f2 "${REPO_NAME}.txt")"
-            touch -d "@${TIMESTAMP}" "${REPO_NAME}.txt"
-          done
-
-      - name: Create a Kosli --paths-file for N files
-        run: |
-          {
-            echo "version: 1"
-            echo "artifacts:"
-            echo "${N_REPOS}" | jq --compact-output '.[]' | while read -r entry; do
-              REPO_NAME="$(echo "${entry}" | jq --raw-output '.repo_name')"
-              echo "  ${REPO_NAME}:"
-              echo "    path: ${REPO_NAME}.txt"
-            done
-          } > paths.yml
-
-      - name: Kosli snapshot paths to staging
-        if: ${{ inputs.scope == 'staging' || inputs.scope == 'both' }}
-        env:
-          KOSLI_HOST: https://staging.app.kosli.com
-          KOSLI_API_TOKEN: ${{ secrets.KOSLI_API_TOKEN_STAGING }}
-        run:
-          kosli snapshot paths staging
-            --paths-file paths.yml
-
-      - name: Kosli snapshot paths to prod
-        if: ${{ inputs.scope == 'prod' || inputs.scope == 'both' }}
-        env:
-          KOSLI_HOST: https://app.kosli.com
-          KOSLI_API_TOKEN: ${{ secrets.KOSLI_API_TOKEN_PROD }}
-        # There is only one fake environment, named "staging". We report it twice:
-        # once to https://staging.app.kosli.com and once to https://app.kosli.com.
-        run:
-          kosli snapshot paths staging
-            --paths-file paths.yml
+    uses: ./.github/workflows/demo-snapshot.yml
+    with:
+      scope: ${{ inputs.scope }}
+      repo_count: ${{ inputs.repo_count }}
+      rogue_artifact: ''
+    secrets:
+      KOSLI_API_TOKEN_STAGING: ${{ secrets.KOSLI_API_TOKEN_STAGING }}
+      KOSLI_API_TOKEN_PROD: ${{ secrets.KOSLI_API_TOKEN_PROD }}
