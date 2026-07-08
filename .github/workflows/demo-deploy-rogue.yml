@@ -12,7 +12,7 @@
 # view may therefore flip back to green -- navigate to your rogue snapshot to show
 # it, or pause the schedule in main-cronjob.yml for a clean live view.
 
-name: Demo - deploy rogue artifact (no provenance)
+name: Demo - deploy no-provenance artifact
 
 on:
   workflow_dispatch:

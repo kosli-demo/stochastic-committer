@@ -9,7 +9,7 @@
 # snapshots, with no repo_count/repo_chance commit+CI fan-out. scope is
 # hard-wired to prod (same environment as demo-deploy-rogue.yml).
 
-name: Demo - reset environment to green
+name: Demo - reset environment to compliant
 
 on:
   workflow_dispatch: {}
