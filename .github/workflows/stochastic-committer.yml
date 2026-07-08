@@ -165,22 +165,24 @@ jobs:
     # has actually failed or been cancelled.
     if: ${{ !failure() && !cancelled() && needs.select-n-repos.outputs.selected_repos != '[]' }}
     strategy:
-      # fail-fast: false so one repo's failing CI run does not cancel the sibling matrix
-      # legs. Each selected repo commits + runs its CI independently; a failure in one
-      # leaves the others free to finish and attest their own provenance. Without this,
+      # fail-fast: false so one repo's failing commit/trigger leg does not cancel the sibling
+      # matrix legs. Each selected repo commits + triggers its CI independently; a failure in
+      # one leaves the others free to finish and attest their own provenance. Without this,
       # the default fail-fast: true would cancel every in-flight leg on the first failure.
       fail-fast: false
-      # max-parallel throttles the fan-out. Hundreds of legs each doing `gh workflow run`
-      # + `gh run watch` can trip GitHub's secondary rate limits, which would itself
-      # manufacture the CI failures we are trying to survive.
+      # max-parallel caps how many legs run at once. Each leg is short -- one `gh workflow run`
+      # POST, then exit -- so at 20 concurrent legs the dispatch rate stays well inside GitHub's
+      # secondary rate limits (20 concurrent requests vs a 100 ceiling; the resulting POST rate
+      # vs the 900-points/min and 80-content-requests/min ceilings). With legs this short,
+      # max-parallel is the main lever bounding that rate, so raising it needs care.
       max-parallel: 20
       matrix:
         include: ${{ fromJSON(needs.select-n-repos.outputs.selected_repos) }}
-    uses: ./.github/workflows/commit-to-repo-and-run-ci.yml
+    uses: ./.github/workflows/commit-to-repo-and-trigger-ci.yml
     with:
       scope: ${{ inputs.scope }}
       repo_name: ${{ matrix.repo_name }}
-      # Lets run-ci skip the workflow-availability poll for repos that already exist
+      # Lets trigger-ci skip the workflow-availability poll for repos that already exist
       # (only newly-created repos need it), cutting GitHub API calls per leg.
       exists: ${{ matrix.exists }}
     secrets:
@@ -189,16 +191,122 @@ jobs:
       KOSLI_API_TOKEN_PROD: ${{ secrets.KOSLI_API_TOKEN_PROD }}
 
 
-  simulate-deployments-from-selected-repos:
+  # Waits for every selected repo's dispatched CI to finish before the snapshot harvests, so
+  # the snapshot never reads a source/datetime.txt whose Kosli attestation has not landed yet.
+  # Each selected repo committed a new datetime.txt and dispatched its main.yml CI, which
+  # attests that file's fingerprint.
+  #
+  # Polls with ONE batched GraphQL query covering the whole selected fleet. GraphQL bills
+  # against a 5000-points/hour budget that is separate from the REST 5000-requests/hour primary
+  # limit, and the whole fleet costs ~1 point per poll, so this wait's cost is independent of
+  # fleet size and of REST usage elsewhere in the run.
+  await-selected-repos-ci:
     needs: [select-n-repos, simulate-commits-to-selected-repos]
+    # Mirror the snapshot's gating: run whenever repos were selected and selection itself
+    # succeeded, even if some commit/trigger legs failed (honest partial -- a repo whose CI
+    # never ran shows up as non-compliant in the snapshot rather than silently vanishing).
+    if: ${{ always() && needs.select-n-repos.result == 'success' && needs.select-n-repos.outputs.selected_repos != '[]' }}
+    runs-on: ubuntu-latest
+    env:
+      SELECTED_REPOS: ${{ needs.select-n-repos.outputs.selected_repos }}
+      GH_TOKEN: ${{ secrets.CLONE_PUSH_REPOS }}
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+
+      - name: Wait for all triggered CI runs to complete
+        # Each selected repo received exactly one commit this run and its main.yml does not
+        # push back to main, so main's HEAD is the commit whose workflow_dispatch CI run we
+        # are waiting on. A commit with no Actions workflow_dispatch check suite yet counts
+        # as PENDING (never as done), so we fail toward "not complete" -- we never let the
+        # snapshot proceed on an unproven attestation.
+        run: |
+          mapfile -t REPOS < <(jq --raw-output '.[].repo_name' <<< "${SELECTED_REPOS}")
+
+          # One aliased repository field per repo (r0, r1, ...); GraphQL aliases must be
+          # bare identifiers, so we index them and map back to REPOS[i] when reporting.
+          build_query() {
+            printf 'fragment ci on Repository { object(expression:"main") { ... on Commit {'
+            printf ' checkSuites(first:20, filterBy:{appId:15368}) { nodes {'
+            printf ' status conclusion workflowRun { event } } } } } }\n'
+            printf '{\n'
+            local i=0
+            for repo in "${REPOS[@]}"; do
+              printf '  r%s: repository(owner:"kosli-demo", name:"%s") { ...ci }\n' "${i}" "${repo}"
+              i=$((i + 1))
+            done
+            printf '  rateLimit { cost remaining }\n}\n'
+          }
+          QUERY="$(build_query)"
+
+          DEADLINE=$(( $(date +%s) + 1800 ))   # 30 minute ceiling
+
+          # Reduce each repo's Actions workflow_dispatch check suites to one state: PENDING
+          # if none exist yet or any is not COMPLETED, SUCCESS if all completed successfully,
+          # else FAILURE. `// []` keeps a missing repo/branch as PENDING rather than erroring.
+          reduce='
+            .data | to_entries | map(select(.key | startswith("r")))
+            | map({ (.key): ((.value.object.checkSuites.nodes // [])
+                | map(select(.workflowRun.event == "workflow_dispatch"))
+                | if length == 0 then "PENDING"
+                  elif any(.status != "COMPLETED") then "PENDING"
+                  elif all(.conclusion == "SUCCESS") then "SUCCESS"
+                  else "FAILURE" end) })
+            | add'
+
+          while true; do
+            # gh exits non-zero (and names the alias on stderr) if any repo cannot be
+            # resolved yet -- e.g. a just-created repo still replicating into GraphQL -- but
+            # it STILL returns partial data for the repos that did resolve. Tolerate the exit
+            # and drop stderr: an unresolved repo reads as null -> PENDING below (keep
+            # waiting), the safe direction, and one laggard never hides its siblings' states.
+            RESULT="$(gh api graphql --field query="${QUERY}" 2>/dev/null || true)"
+            # An empty/garbage response (total network failure) reduces to {}, so every repo
+            # defaults to PENDING and we simply poll again until the deadline.
+            STATES_JSON="$(jq --compact-output "${reduce}" <<< "${RESULT}" 2>/dev/null || echo '{}')"
+
+            pending=""
+            failed=""
+            for i in "${!REPOS[@]}"; do
+              state="$(jq --raw-output --arg k "r${i}" '.[$k] // "PENDING"' <<< "${STATES_JSON}")"
+              case "${state}" in
+                PENDING) pending="${pending} ${REPOS[$i]}" ;;
+                FAILURE) failed="${failed} ${REPOS[$i]}" ;;
+              esac
+            done
+
+            if [ -z "${pending}" ]; then
+              break
+            fi
+            echo "Waiting on:${pending}"
+            if [ "$(date +%s)" -ge "${DEADLINE}" ]; then
+              echo "Timed out after 30 minutes still waiting on:${pending}"
+              exit 1
+            fi
+            sleep 20
+          done
+
+          # Every run has reached a terminal state. Fail if any CI did not succeed. The
+          # snapshot needs this job yet runs under always(), so it still reports the true
+          # environment even when this job fails.
+          if [ -n "${failed}" ]; then
+            echo "CI did not succeed for:${failed}"
+            exit 1
+          fi
+          echo "All ${#REPOS[@]} selected repos' CI runs succeeded"
+
+  simulate-deployments-from-selected-repos:
+    needs: [select-n-repos, simulate-commits-to-selected-repos, await-selected-repos-ci]
     # `needs` keeps the ordering edge: this job still waits for every commit/CI leg to
     # finish before snapshotting, so it never reads a repo's datetime.txt before the CI
     # run that attests it has completed. The `if` only relaxes the *success* requirement:
     #
-    #   - always() lets the snapshot run even when some commit legs failed. With
-    #     fail-fast: false above, a partial failure must no longer discard the whole
-    #     snapshot -- the repos whose CI succeeded still get their matching provenance,
-    #     and any that failed show up honestly as non-compliant in the environment.
+    #   - always() lets the snapshot run even when some commit legs failed. Combined with
+    #     fail-fast: false above, a partial failure leaves the whole snapshot intact -- the
+    #     repos whose CI succeeded still get their matching provenance, and any that failed
+    #     show up honestly as non-compliant in the environment.
     #
     #   - gating on select-n-repos success avoids snapshotting nothing: if repo
     #     selection itself failed there is no fleet to report.

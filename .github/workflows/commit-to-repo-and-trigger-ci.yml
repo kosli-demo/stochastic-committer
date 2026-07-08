@@ -33,7 +33,7 @@ jobs:
     secrets:
       CLONE_PUSH_REPOS: ${{ secrets.CLONE_PUSH_REPOS }}
 
-  run-ci:
+  trigger-ci:
     needs: [commit-to-repo]
     runs-on: ubuntu-latest
     env:
@@ -67,7 +67,11 @@ jobs:
             fi
           done
 
-      - name: Run CI workflow
+      - name: Trigger CI workflow
+        # Dispatch the target CI (one REST POST) and exit without waiting for it. Completion
+        # is awaited once for the whole fleet by the await-selected-repos-ci consolidator,
+        # via batched GraphQL. Holding each leg to a single REST call keeps the shared
+        # CLONE_PUSH_REPOS token's 5000-request/hour primary limit independent of fan-out size.
         run: |
           # Setup where triggered workflow will attest to
           case "${{ inputs.scope }}" in
@@ -85,40 +89,9 @@ jobs:
               ;;
           esac
 
-          BEFORE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-
           # Trigger the workflow, telling it where to attest to
           gh workflow run main.yml \
             --repo "kosli-demo/${REPO_NAME}" \
             --ref main \
             --field kosli_host="${KOSLI_HOST}" \
             --field kosli_api_token="${KOSLI_API_TOKEN}"
-
-          # Get id of workflow run
-          for i in $(seq 1 12); do
-            RUN_ID=$(gh run list \
-              --repo "kosli-demo/${REPO_NAME}" \
-              --workflow main.yml \
-              --created ">=${BEFORE}" \
-              --limit 1 \
-              --json databaseId \
-              --jq '.[0].databaseId // empty')
-            if [ -n "${RUN_ID}" ]; then
-              break
-            fi
-            echo "Waiting for run to appear (attempt ${i}/12)..."
-            sleep 5
-            if [ "${i}" -eq 12 ]; then
-              echo "Run not found after 60 seconds"
-              exit 1
-            fi
-          done
-
-          # Wait for workflow run to finish. --interval 30 (default is 3) cuts the
-          # number of status polls ~10x. At 3s, a multi-minute run is 40-60 polls, and
-          # across many matrix legs sharing one token that loop is the dominant consumer
-          # of the 5000-request/hour rate limit.
-          gh run watch "${RUN_ID}" \
-            --repo "kosli-demo/${REPO_NAME}" \
-            --interval 30 \
-            --exit-status

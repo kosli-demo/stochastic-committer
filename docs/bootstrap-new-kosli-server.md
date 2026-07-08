@@ -101,40 +101,31 @@ compliant.
   bootstrap only concern the first 200. If `repo_count` is ever raised, re-run
   the bootstrap with the new count and `repo_chance=100`.
 
-- **Mind the GitHub API rate limit -- this is the main thing that breaks a
-  `repo_chance=100` run.** Every selected repo's `run-ci` job drives the
-  downstream CI through the `gh` CLI (`gh workflow run`, `gh run list`,
-  `gh run watch`), and all legs share the single `CLONE_PUSH_REPOS` token, which
-  has GitHub's standard **5000-requests-per-hour primary limit**. When that limit
-  is hit, `gh` returns `HTTP 403: API rate limit exceeded` and the leg fails even
-  though its downstream CI may have succeeded. A `repo_count=200 repo_chance=100`
-  run on 2026-07-07 failed 120 of 200 legs this way before the call volume was
-  reduced.
+- **GitHub API rate limits.** The `CLONE_PUSH_REPOS` token is shared across all
+  legs and carries GitHub's standard **5000-requests-per-hour primary limit**.
+  Per-leg REST usage is kept minimal so this limit does not scale with fan-out:
+  each `trigger-ci` leg makes a single `gh workflow run` POST (plus a short
+  workflow-availability poll only for repos being created this run), and
+  `commit-to-repo` clones and pushes over git rather than the REST API. Waiting
+  for the dispatched CI to finish is not done per leg: the `await-selected-repos-ci`
+  job polls the whole fleet with one batched GraphQL query, which bills against
+  GraphQL's separate **5000-points-per-hour** budget (~1 point per poll).
 
-  The per-leg call volume has since been cut (approx. 60-80 calls/leg down to
-  approx. 15-20) by three changes in `commit-to-repo-and-run-ci.yml`:
-  - `gh run watch --interval 30` (was polling every 3s -- the dominant consumer),
-  - skipping the workflow-availability poll for repos that already exist
-    (`if: ${{ !inputs.exists }}`),
-  - and no longer hiding the `gh` error, so a real 403 is visible in the log
-    rather than showing up as a misleading "workflow not found".
+  The rate-limit consideration that remains is GitHub's **secondary** limit on
+  bursts of concurrent requests -- hundreds of simultaneous `gh workflow run` POSTs
+  can trip it. `max-parallel` (20 in `simulate-commits-to-selected-repos`) caps
+  that concurrency.
 
-  At 200 legs this is roughly 3-4k calls versus the ~12-16k that blew the limit,
-  so a full bootstrap should now fit -- but it is tight. Note: `max-parallel`
-  does NOT help here -- it caps concurrency, not total calls per hour.
-
-  If a `repo_count=200` run still trips the 403, the fix is to process fewer
-  legs per run. Today `select_repos.py` always takes the **first** `repo_count`
-  entries (`json_data[:n]`), so you cannot yet pick an arbitrary slice such as
-  repos 51-100 -- lowering `repo_count` only ever re-processes the same front of
-  the list. Batching the bootstrap into slices (repos 1-50, then 51-100, ...)
-  needs an `offset`/start argument added to `select_repos.py` and threaded
-  through the workflow; that change is not yet made.
+  `select_repos.py` takes the **first** `repo_count` entries of `all-repos.json`
+  (`json_data[:n]`), so you cannot select an arbitrary slice such as repos 51-100;
+  lowering `repo_count` only re-processes the front of the list. Slicing the
+  bootstrap into ranges would need an `offset`/start argument added to
+  `select_repos.py` and threaded through the workflow.
 
 - **Partial failures are tolerated, so re-run to mop up.** The commit matrix
   uses `fail-fast: false` and the snapshot runs under
   `if: always() && needs.select-n-repos.result == 'success'`, so one repo's
-  failing CI no longer cancels the others or discards the snapshot. Any repo
+  failing CI does not cancel the others or discard the snapshot. Any repo
   whose CI failed will be snapshotted with no provenance and show as
   non-compliant (this is the correct, honest outcome). Simply run the bootstrap
   again to attest the stragglers -- a second `repo_chance=100` pass re-runs CI
