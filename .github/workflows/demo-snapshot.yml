@@ -68,11 +68,16 @@ jobs:
           version: ${{ vars.KOSLI_CLI_VERSION }}
 
       - name: Harvest fleet files, adding rogue_artifact if set
-        # curl hits raw.githubusercontent.com, a CDN serving static files with no
-        # per-token rate limits, so fetching hundreds sequentially is fine.
+        # curl hits raw.githubusercontent.com. It has no per-TOKEN limit (the
+        # requests are unauthenticated) but it DOES enforce a per-IP rate limit,
+        # and a burst of ~repo_count sequential fetches can trip it (HTTP 429).
+        # --retry rides out that transient 429: curl classifies 429 as transient
+        # and backs off exponentially, honouring any Retry-After header. --fail is
+        # kept and --retry-all-errors is deliberately NOT used, so a genuine 404
+        # still aborts the step rather than snapshotting an incomplete fleet.
         run: |
           URL=https://raw.githubusercontent.com/kosli-demo/base/refs/heads/main/data/all-repos.json
-          curl --fail --output all_repos.json --show-error --silent "${URL}"
+          curl --fail --retry 5 --retry-max-time 120 --output all_repos.json --show-error --silent "${URL}"
 
           # First repo_count repo names = the same fleet the steady-state snapshot
           # maintains (select_repos.py takes json_data[:n]).
@@ -81,7 +86,7 @@ jobs:
           github=https://raw.githubusercontent.com
           while read -r REPO_NAME; do
             url="${github}/kosli-demo/${REPO_NAME}/refs/heads/main/source/datetime.txt"
-            curl --fail --output "${REPO_NAME}.txt" --show-error --silent "${url}"
+            curl --fail --retry 5 --retry-max-time 120 --output "${REPO_NAME}.txt" --show-error --silent "${url}"
             TIMESTAMP="$(cut -d' ' -f2 "${REPO_NAME}.txt")"
             touch -d "@${TIMESTAMP}" "${REPO_NAME}.txt"
           done < artifact_names.txt
