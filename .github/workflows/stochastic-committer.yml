@@ -153,8 +153,12 @@ jobs:
       - name: Commit and push
         run: |
           git add data/all-repos.json
-          git commit --message "Mark newly created repos as existing"
-          git push
+          if git diff --cached --quiet; then
+            echo "No newly created repos to mark; working tree clean, nothing to commit."
+          else
+            git commit --message "Mark newly created repos as existing"
+            git push
+          fi
 
 
   simulate-commits-to-selected-repos:
