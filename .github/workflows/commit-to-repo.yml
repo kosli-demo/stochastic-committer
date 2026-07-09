@@ -43,8 +43,8 @@ jobs:
           # bot repeating "Simulated commit". Fetched from raw.githubusercontent, a CDN
           # with no per-token rate limit, the same way all-repos.json is fetched.
           raw="https://raw.githubusercontent.com/kosli-demo/stochastic-committer/refs/heads/main/data"
-          curl --fail --silent --show-error --output /tmp/commit-messages.json "${raw}/commit-messages.json"
-          curl --fail --silent --show-error --output /tmp/authors.json "${raw}/authors.json"
+          curl --fail --retry 5 --retry-max-time 120 --silent --show-error --output /tmp/commit-messages.json "${raw}/commit-messages.json"
+          curl --fail --retry 5 --retry-max-time 120 --silent --show-error --output /tmp/authors.json "${raw}/authors.json"
           MESSAGE="$(jq --raw-output '.[]' /tmp/commit-messages.json | shuf --head-count=1)"
           AUTHOR="$(jq --compact-output '.[]' /tmp/authors.json | shuf --head-count=1)"
           AUTHOR_NAME="$(jq --raw-output '.name' <<< "${AUTHOR}")"

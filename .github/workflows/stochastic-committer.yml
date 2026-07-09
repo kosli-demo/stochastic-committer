@@ -85,7 +85,7 @@ jobs:
           GH_TOKEN: ${{ secrets.CLONE_PUSH_REPOS }}
         run: |
           URL=https://raw.githubusercontent.com/kosli-demo/base/refs/heads/main/data/all-repos.json
-          curl --fail --output all_repos.json --silent "${URL}"
+          curl --fail --retry 5 --retry-max-time 120 --output all_repos.json --show-error --silent "${URL}"
           ./bin/select_repos.py all_repos.json ${REPO_COUNT} ${REPO_CHANCE} > n_repos.json
           SELECTED_REPOS="$(jq --compact-output '[.[] | select(.selected == true)]' n_repos.json)"
 
