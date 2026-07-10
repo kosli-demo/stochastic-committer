@@ -1,0 +1,20 @@
+[
+  {
+    "repo_name": "golden-ledger",
+    "image_ref": "ghcr.io/kosli-demo/golden-ledger:52ec808",
+    "digest": "d1a92f4f43c7c91c8bf5d1f938e2a3a8fa9ed88fce6bd4a3cdb5207ad2c99d3d",
+    "creation_timestamp": 1783600000,
+    "namespace": "beta",
+    "pod_name": "golden-ledger-7d9f8c6b5-x4k2p",
+    "owners": [
+      {
+        "apiVersion": "apps/v1",
+        "kind": "ReplicaSet",
+        "name": "golden-ledger-7d9f8c6b5",
+        "uid": "1b8c0f2e-3a4d-4c5e-9f01-2a3b4c5d6e7f",
+        "controller": true,
+        "blockOwnerDeletion": true
+      }
+    ]
+  }
+]

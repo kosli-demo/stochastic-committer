@@ -1,0 +1,38 @@
+{
+  "index": 12,
+  "type": "K8S",
+  "artifacts": [
+    {
+      "name": "ghcr.io/kosli-demo/price-index:abc1234",
+      "fingerprint": "3f0a1c5e9b2d4a6f8c1e0b7d5a9f2c4e6b8d0a1c3e5f7a9b1d3f5a7c9e1b3d5f",
+      "creationTimestamp": [1783500000],
+      "annotation": { "type": "unchanged", "was": 1, "now": 1 },
+      "pods": {
+        "price-index-fxblt7pxf-d4xvq": {
+          "namespace": "beta",
+          "creationTimestamp": 1783500000,
+          "owners": [
+            { "apiVersion": "apps/v1", "kind": "ReplicaSet", "name": "price-index-fxblt7pxf",
+              "uid": "917b70a1-a22c-590f-bb4d-0efc7af9a83f", "controller": true, "blockOwnerDeletion": true }
+          ]
+        }
+      }
+    },
+    {
+      "name": "ghcr.io/kosli-demo/golden-ledger:0011223",
+      "fingerprint": "beadfeed00112233445566778899aabbccddeeff00112233445566778899aabb",
+      "creationTimestamp": [1783400000],
+      "annotation": { "type": "unchanged", "was": 1, "now": 1 },
+      "pods": {
+        "golden-ledger-5b6c7d8e9-qrs4t": {
+          "namespace": "beta",
+          "creationTimestamp": 1783400000,
+          "owners": [
+            { "apiVersion": "apps/v1", "kind": "ReplicaSet", "name": "golden-ledger-5b6c7d8e9",
+              "uid": "2c9d1e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f", "controller": true, "blockOwnerDeletion": true }
+          ]
+        }
+      }
+    }
+  ]
+}

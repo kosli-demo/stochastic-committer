@@ -9,7 +9,7 @@
 # over all N repos regardless of selection would waste jobs and, with a large
 # enough N, could hit the limit.
 
-name: Simulate commits on many repos
+name: Simulate commits on many repos (v2 - real digests, snapshot is a TODO no-op)
 
 on:
   workflow_call:
@@ -72,10 +72,6 @@ jobs:
       selected_repos: ${{ steps.set-repos.outputs.selected_repos }}
       non_existent_repos: ${{ steps.set-repos.outputs.non_existent_repos }}
     steps:
-      - name: Deliberately fail the job while working on replacement workflow
-        run:
-          exit 42
-
       - name: Harden Runner
         uses: step-security/harden-runner@v2
         with:
@@ -307,29 +303,20 @@ jobs:
 
   simulate-deployments-from-selected-repos:
     needs: [select-n-repos, simulate-commits-to-selected-repos, await-selected-repos-ci]
-    # `needs` keeps the ordering edge: this job still waits for every commit/CI leg to
-    # finish before snapshotting, so it never reads a repo's datetime.txt before the CI
-    # run that attests it has completed. The `if` only relaxes the *success* requirement:
+    # TODO: replace this no-op with building and PUTting the fake K8S snapshot to
+    # the staging-k8s env. It is deliberately a no-op for now so the existing
+    # server-type `staging` env is left completely untouched. The purpose of a v2
+    # run is to (re)attest all selected repos' flows with the REAL image digest
+    # (their CI now calls secure-docker-build2), producing new trails; the
+    # environment is not reported here yet.
     #
-    #   - always() lets the snapshot run even when some commit legs failed. Combined with
-    #     fail-fast: false above, a partial failure leaves the whole snapshot intact -- the
-    #     repos whose CI succeeded still get their matching provenance, and any that failed
-    #     show up honestly as non-compliant in the environment.
-    #
-    #   - gating on select-n-repos success avoids snapshotting nothing: if repo
-    #     selection itself failed there is no fleet to report.
-    #
-    # The harvest + paths-file + snapshot logic lives in the reusable demo-snapshot.yml,
-    # shared with the rogue-deployment demo. It re-derives the first repo_count repos from
-    # all-repos.json (the same json_data[:n] slice select_repos.py uses) rather than
-    # consuming this run's N_REPOS. rogue_artifact is empty so only the real,
-    # attested fleet is snapshotted.
+    # `needs` still gates on await-selected-repos-ci so the ordering matches v1.
     if: ${{ always() && needs.select-n-repos.result == 'success' }}
-    uses: ./.github/workflows/demo-snapshot.yml
-    with:
-      scope: ${{ inputs.scope }}
-      repo_count: ${{ inputs.repo_count }}
-      rogue_artifact: ''
-    secrets:
-      KOSLI_API_TOKEN_STAGING: ${{ secrets.KOSLI_API_TOKEN_STAGING }}
-      KOSLI_API_TOKEN_PROD: ${{ secrets.KOSLI_API_TOKEN_PROD }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: TODO snapshot to staging-k8s
+        run: |
+          echo "TODO: build and PUT the fake K8S snapshot to the staging-k8s env."
+          echo "No-op for now so the existing 'staging' env is unaffected."
+          echo "This run's purpose: (re)attest selected repos' flows with the real"
+          echo "image digest via secure-docker-build2, creating new trails."
