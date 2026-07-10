@@ -1,0 +1,16 @@
+{
+  "golden-ledger": [
+    {
+      "fingerprint": "d1a92f4f43c7c91c8bf5d1f938e2a3a8fa9ed88fce6bd4a3cdb5207ad2c99d3d",
+      "git_commit": "52ec808f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d",
+      "git_commit_info": { "sha1": "52ec808f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d", "timestamp": 1783600000 }
+    }
+  ],
+  "risk-service": [
+    {
+      "fingerprint": "a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4",
+      "git_commit": "aabbccddeeff00112233445566778899aabbccdd",
+      "git_commit_info": { "sha1": "aabbccddeeff00112233445566778899aabbccdd", "timestamp": 1783500000 }
+    }
+  ]
+}

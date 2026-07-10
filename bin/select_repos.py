@@ -15,7 +15,7 @@ def print_help():
         Writes (to stdout) a JSON array with one dict for each entry.
         Each dict has:
           repo_name -- the repo name
-          selected  -- true if randomly chosen for a commit this run
+          selected  -- true if the repo is new (exists false) or randomly chosen
           exists    -- true if the repo already exists on GitHub (read from input JSON)
 
         This JSON can be used as the source for a Github Action strategy:matrix:include
@@ -56,7 +56,11 @@ def select_repos():
 
     repos = []
     for repo in json_data[:n]:
-        repo["selected"] = random.randint(1, 100) <= chance
+        # A repo that does not yet exist is force-selected regardless of chance,
+        # so a newly-added fleet repo is always committed + CI'd (attested) and
+        # can enter the environment this run, rather than waiting to be picked by
+        # the stochastic chance.
+        repo["selected"] = (not repo["exists"]) or (random.randint(1, 100) <= chance)
         repos.append(repo)
     return repos
 

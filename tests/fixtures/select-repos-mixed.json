@@ -1,0 +1,4 @@
+[
+  { "repo_name": "golden-ledger", "exists": true, "has_junit": true },
+  { "repo_name": "new-frontier", "exists": false, "has_junit": false }
+]

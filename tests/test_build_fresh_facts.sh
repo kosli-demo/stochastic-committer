@@ -2,8 +2,8 @@
 
 # Tests for bin/build_fresh_facts.py: join each attested record (fingerprint +
 # git_commit fetched from a repo's flow) with its all-repos.json k8s block into
-# the --fresh facts that feed build_k8s_snapshot.py. Black-box: run the CLI,
-# assert stdout via jq.
+# the --fresh facts that feed build_k8s_snapshot.py. Black-box: run the script,
+# assert on its JSON stdout with jq.
 
 readonly my_dir="$(cd "$(dirname "${0}")" && pwd)"
 readonly BUILDER="${my_dir}/../bin/build_fresh_facts.py"

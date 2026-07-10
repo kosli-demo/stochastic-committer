@@ -2,7 +2,8 @@
 
 # Tests for bin/build_k8s_snapshot.py: reconcile the current K8S snapshot (empty
 # on the first/bootstrap run) with this run's fresh facts (new or changed repos)
-# into the next snapshot report payload. Black-box: run the CLI, assert stdout via jq.
+# into the next snapshot report payload. Black-box: run the script, assert on its
+# JSON stdout with jq.
 
 readonly my_dir="$(cd "$(dirname "${0}")" && pwd)"
 readonly BUILDER="${my_dir}/../bin/build_k8s_snapshot.py"

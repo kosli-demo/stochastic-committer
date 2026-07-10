@@ -1,0 +1,16 @@
+[
+  {
+    "repo_name": "golden-ledger",
+    "exists": true,
+    "has_junit": true,
+    "env": "staging-k8s",
+    "k8s": {
+      "namespace": "beta",
+      "podName": "golden-ledger-7d9f8c6b5-x4k2p",
+      "owners": [
+        { "apiVersion": "apps/v1", "kind": "ReplicaSet", "name": "golden-ledger-7d9f8c6b5",
+          "uid": "1b8c0f2e-3a4d-4c5e-9f01-2a3b4c5d6e7f", "controller": true, "blockOwnerDeletion": true }
+      ]
+    }
+  }
+]

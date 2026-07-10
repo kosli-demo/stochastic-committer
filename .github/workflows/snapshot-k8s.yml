@@ -1,0 +1,154 @@
+name: Report a fake K8S snapshot
+
+# Reusable workflow that builds and PUTs a fake K8S environment snapshot by
+# reconciling the environment's current snapshot (readback) with this run's
+# freshly-attested repos. It calls the pure, unit-tested bin/ scripts and keeps
+# only the network (GET/PUT) and the random deploy-latency here.
+#
+# It never harvests all repos: unchanged repos come from the readback. The target
+# env is read from each entry's `env` field (not passed in). It self-filters to
+# entries that have a `k8s` block, so callers can hand it the full selected_repos.
+
+on:
+  workflow_call:
+    inputs:
+      scope:
+        description: 'Where to report to: staging, prod, or both'
+        type: string
+        required: true
+      selected_repos:
+        description: 'JSON list of repos committed this run (from select-n-repos), each with its k8s block and env'
+        type: string
+        required: true
+    secrets:
+      KOSLI_API_TOKEN_STAGING:
+        required: true
+      KOSLI_API_TOKEN_PROD:
+        required: true
+
+env:
+  KOSLI_ORG: ${{ vars.KOSLI_ORG }}
+  SCOPE: ${{ inputs.scope }}
+  SELECTED_REPOS: ${{ inputs.selected_repos }}
+  KOSLI_API_TOKEN_STAGING: ${{ secrets.KOSLI_API_TOKEN_STAGING }}
+  KOSLI_API_TOKEN_PROD: ${{ secrets.KOSLI_API_TOKEN_PROD }}
+
+jobs:
+  snapshot-k8s:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@v6
+
+      - name: Build fresh facts (host-independent)
+        run: |
+          set -Eeuo pipefail
+          printf '%s' "${SELECTED_REPOS}" > selected_repos.json
+
+          # This workflow reports ONE k8s env, read from the data. Fail rather
+          # than silently mis-report if the selected k8s repos span >1 env.
+          mapfile -t ENVS < <(jq -r '[.[] | select(.k8s) | .env] | unique | .[]' selected_repos.json)
+          if [ "${#ENVS[@]}" -eq 0 ]; then
+            echo "No k8s repos selected; nothing to snapshot."
+            printf '' > env.txt
+            exit 0
+          fi
+          if [ "${#ENVS[@]}" -gt 1 ]; then
+            echo "snapshot-k8s handles a single k8s env; found: ${ENVS[*]}"
+            exit 1
+          fi
+          printf '%s' "${ENVS[0]}" > env.txt
+
+          # Attestation records are host-independent (the real image digest is the
+          # same on every host), so fetch each k8s repo's flow once, from the first
+          # host in scope.
+          case "${SCOPE}" in
+            prod|both) FETCH_HOST="https://app.kosli.com" ; FETCH_TOKEN="${KOSLI_API_TOKEN_PROD}" ;;
+            staging)   FETCH_HOST="https://staging.app.kosli.com" ; FETCH_TOKEN="${KOSLI_API_TOKEN_STAGING}" ;;
+            *) echo "unknown scope: ${SCOPE}" ; exit 1 ;;
+          esac
+
+          echo '{}' > artifacts.json
+          for repo in $(jq -r '.[] | select(.k8s) | .repo_name' selected_repos.json); do
+            body="$(mktemp)"
+            code="$(curl --silent --show-error --retry 5 --retry-max-time 120 \
+              --output "${body}" --write-out '%{http_code}' \
+              --header "Authorization: Bearer ${FETCH_TOKEN}" \
+              "${FETCH_HOST}/api/v2/artifacts/${KOSLI_ORG}/${repo}-ci")"
+            # Skip a repo whose flow has no artifacts yet (e.g. its CI failed this
+            # run): never fabricate a change; the readback carries it if present.
+            if [ "${code}" = "200" ] && [ "$(jq 'length' "${body}")" -gt 0 ]; then
+              jq --arg r "${repo}" --slurpfile a "${body}" '.[$r] = $a[0]' artifacts.json > tmp.json
+              mv tmp.json artifacts.json
+            else
+              echo "skipping ${repo}: no flow artifacts (http ${code})"
+            fi
+          done
+
+          # Only build records for repos we actually have artifacts for.
+          jq --slurpfile arts artifacts.json \
+            '[ .[] | select(.k8s) | select(.repo_name as $r | ($arts[0] | has($r))) ]' \
+            selected_repos.json > selected_with_artifacts.json
+
+          python3 bin/build_attestation_record.py \
+            --selected selected_with_artifacts.json --artifacts artifacts.json > attested.json
+
+          # Add a random 60-180s deploy latency so the pod "started" a realistic
+          # 1-3 min after the build (applied here, not in the pure scripts).
+          python3 -c 'import json, random; recs = json.load(open("attested.json")); [r.update(creation_timestamp=r["creation_timestamp"] + random.randint(60, 180)) for r in recs]; json.dump(recs, open("attested.json", "w"))'
+
+          python3 bin/build_fresh_facts.py \
+            --all-repos selected_repos.json --attested attested.json > fresh.json
+
+      - name: Reconcile against readback and report, per host
+        run: |
+          set -Eeuo pipefail
+          ENV="$(cat env.txt)"
+          if [ -z "${ENV}" ]; then
+            echo "Nothing to snapshot."
+            exit 0
+          fi
+
+          case "${SCOPE}" in
+            staging) HOSTS=("https://staging.app.kosli.com") ; TOKENS=("${KOSLI_API_TOKEN_STAGING}") ;;
+            prod)    HOSTS=("https://app.kosli.com") ; TOKENS=("${KOSLI_API_TOKEN_PROD}") ;;
+            both)    HOSTS=("https://app.kosli.com" "https://staging.app.kosli.com")
+                     TOKENS=("${KOSLI_API_TOKEN_PROD}" "${KOSLI_API_TOKEN_STAGING}") ;;
+            *) echo "unknown scope: ${SCOPE}" ; exit 1 ;;
+          esac
+
+          for i in "${!HOSTS[@]}"; do
+            host="${HOSTS[$i]}"
+            token="${TOKENS[$i]}"
+
+            # Read the current snapshot. An env with no snapshots yet returns
+            # 400 (the -1 index cannot resolve against 0 snapshots) - we treat
+            # that as empty (bootstrap). 404 (env not found) is treated the same.
+            code="$(curl --silent --show-error --retry 5 --retry-max-time 120 \
+              --output current.json --write-out '%{http_code}' \
+              --header "Authorization: Bearer ${token}" \
+              "${host}/api/v2/snapshots/${KOSLI_ORG}/${ENV}/-1")"
+            if [ "${code}" = "200" ]; then
+              : # use current.json as read back
+            elif [ "${code}" = "400" ] || [ "${code}" = "404" ]; then
+              echo '{"artifacts":[]}' > current.json
+            else
+              echo "GET snapshot failed on ${host}: ${code}"
+              cat current.json
+              exit 1
+            fi
+
+            python3 bin/build_k8s_snapshot.py --current current.json --fresh fresh.json > report.json
+
+            curl --fail --silent --show-error --retry 5 --retry-max-time 120 \
+              --request PUT \
+              --header "Authorization: Bearer ${token}" \
+              --header "Content-Type: application/json" \
+              --data @report.json \
+              "${host}/api/v2/environments/${KOSLI_ORG}/${ENV}/report/K8S"
+            echo "reported ${ENV} to ${host}"
+          done

@@ -61,17 +61,25 @@ consequences we hit:
    repos must re-run CI under option-A** so their flows re-attest real digests.
 
 2. **New repos have no flow at all.** Bumping `repo_count` (e.g. 200 -> 300)
-   introduces repos that may not exist yet, and pushing a repo does not trigger
-   CI (base `main.yml` is `workflow_dispatch`/`workflow_call` only). So a
-   newly-created-but-unselected repo has no attestation. **Fix: create it and
-   run its CI under option-A** before it can be reported.
+   introduces repos that may not exist yet. Creating a repo does NOT attest it:
+   `create-new-repo.yml` creates + commits content but does not trigger CI (base
+   `main.yml` is `workflow_dispatch`/`workflow_call` only); only the
+   `commit-to-repo-and-trigger-ci.yml` path (run for *selected* repos) attests.
+   So a created-but-unselected repo has no attestation and cannot be a compliant
+   env artifact. **Fix: `select_repos.py` force-selects `exists == false` repos**
+   (`selected = (not exists) or (rand <= chance)`), so a new repo is always
+   committed + CI'd (real-digest attested) the run it is added, regardless of
+   `repo_chance`.
 
-**Unified rule:** eligibility = "has run CI under option-A". Bootstrap and any
-`repo_count` increase both perform the same pre-step - the existing
-`create-new-repos` + `trigger-ci` + `await-ci` machinery, but driven over the
-**target set** rather than only the stochastically-selected subset. In practice
-this is just a high `repo_chance` (100 for bootstrap - section 8), which selects
-every target repo and so commits + CIs them all.
+**Unified rule:** eligibility = "has run CI under option-A". How the target set
+is driven through commit + CI differs by case:
+
+- **Bootstrap** re-attests the *existing* fleet with real digests, so it uses
+  `repo_chance=100` to select (and re-CI) every repo once (section 8).
+- **A `repo_count` increase** does NOT need a high `repo_chance`: the new repos
+  have `exists == false` and are force-selected by `select_repos.py`, so they are
+  committed + CI'd (attested) and enter the env the same run, at the normal
+  `repo_chance` (section 10). The already-present repos come from the readback.
 
 ## 5. Prerequisites
 
@@ -147,7 +155,8 @@ selected:
 - every repo gets a commit + CI run, so every flow attests a real image digest
   (this is the "force-CI all target repos" of section 4, realized by selection);
 - every repo is therefore `--fresh`, harvested from its just-attested flow;
-- `--current` is empty (first run: GET `-1` returns 404 -> treated as empty),
+- `--current` is empty (first run: GET `-1` returns 400 -- the -1 index cannot
+  resolve against 0 snapshots -- treated as empty),
   which `build_k8s_snapshot.py` already handles.
 
 So `build_fresh_facts.py` (over all 200 selected flows) -> `build_k8s_snapshot.py`
@@ -187,9 +196,13 @@ the readback. No per-repo runtime state is persisted between runs.
 
 ## 10. `repo_count` changes
 
-- **Raise (N -> M):** the new repos are eligible only after CI under option-A
-  (section 4). On the bump, create them and trigger their CI, then include them
-  as `--fresh`; the existing N come from readback. They annotate as `started`.
+- **Raise (N -> M):** just bump `repo_count` and run at the normal `repo_chance`.
+  The new repos (`exists == false`) are force-selected by `select_repos.py`, so
+  they are created, committed, CI'd (real-digest attested) and included as
+  `--fresh` that run - appearing compliant, annotated `started`; the existing N
+  come from readback. No `repo_chance=100` needed. Caveat: a *large* increase
+  whose forced-new count (plus stochastic picks) exceeds GitHub's 256-job matrix
+  limit needs batching; small bumps are fine.
 - **Lower (M -> N):** out of scope for now - excess repos would linger rather
   than auto-drop (no `--fleet`/membership input). Handle out-of-band
   (re-bootstrap a fresh env) if it ever comes up.
@@ -247,21 +260,77 @@ PUT  /api/v2/environments/kosli-demo/staging-k8s/report/K8S
 
 - [ ] `include_scaling` on `staging-k8s`: keep off (recommended) or model replicas.
 - [ ] Exact policy set to attach later (provenance only, or + SDLC-CTRL-0004).
-- [ ] `creationTimestamp` source for a fresh fact: the committer's commit time vs
-      the flow artifact's commit timestamp (both are the repo's current commit).
+- [x] `creationTimestamp` = flow base time (`created_at`/`git_commit_info`) + a
+      random 60-180s deploy latency, applied in `snapshot-k8s.yml` for fresh repos
+      only (unchanged repos keep their stored value via readback, so no drift).
 - [ ] Cleanup (don't forget): `stochastic-committer2.yml`'s `select-n-repos` job
       still carries a comment claiming the `simulate-deployments-from-selected-repos`
-      job "snapshots all N repos, so all N repos must exist before it runs" - stale
-      in v2, where that job is a TODO no-op. Fix it when the K8S snapshot replaces
-      the no-op (or sooner).
+      job "snapshots all N repos, so all N repos must exist before it runs". Stale:
+      the K8S snapshot reconciles readback + fresh (it never harvests all N), and
+      with force-selection only the selected/new repos are created + committed.
+      Deliberately left as-is for now; fix when convenient.
+- [x] `snapshot-k8s.yml`: a *selected* repo whose CI failed (no new attestation;
+      `simulate-deployments` runs under `always()`) is skipped - let the readback
+      carry it, never fabricate a change. Decided.
+- [ ] `snapshot-k8s.yml`: fetch the flow attestation once (the digest is
+      host-independent) or per host? GET `-1` and PUT are per host regardless.
+- [ ] A K8S equivalent of the rogue-deploy / reset-to-green demo (deferred; no
+      `rogue_artifact` input on `snapshot-k8s.yml`).
 
 Resolved: new env (not conversion); option A + flow-latest-attested digest
 source; `all-repos.json` augmentation done (stored, `namespace: beta`);
 eligibility = has-run-CI-under-option-A; bootstrap = one `repo_chance=100` run
 with empty `--current`; `staging-k8s` created; policies deferred until snapshots
-work.
+work; new repos force-selected in `select_repos.py` so a `repo_count` bump works
+at the normal `repo_chance` (no `repo_chance=100` needed for bumps).
 
-## 15. Guardrails
+## 15. snapshot-k8s.yml (reusable snapshot workflow)
+
+The reusable workflow the committer calls to build and PUT the K8S snapshot,
+wiring the two pure scripts (section 7) to the Kosli GET/PUT calls. Both
+bootstrap (section 8) and steady state (section 9) use it unchanged.
+
+Inputs (and how they differ from `demo-snapshot.yml`):
+- `selected_repos` (required) - the JSON from
+  `select-n-repos.outputs.selected_repos`; each entry carries `repo_name`, its
+  `k8s` block, and `env`. Replaces `repo_count`.
+- `scope` (required) - `staging` | `prod` | `both`; which host(s) to GET/PUT.
+- secrets `KOSLI_API_TOKEN_STAGING`, `KOSLI_API_TOKEN_PROD`; `KOSLI_ORG` via `vars`.
+- NOT inputs: `repo_count` (never harvests all N - readback covers the rest),
+  `rogue_artifact` (no rogue concept yet), `env_name` (read from the data).
+
+The env comes from the data, not a parameter. Every entry has `env` (all
+`staging-k8s` today). The workflow groups its entries by `.env` and does one
+reconcile+PUT per distinct env - a single group now. This is how the multi-env
+split works with no `env_name` input.
+
+One workflow per env *type* (self-filtering). The report body differs by type,
+so there is one workflow per type: `snapshot-k8s.yml` reads each entry's `k8s`
+block and builds a K8S report; a future `snapshot-ecs.yml` reads an `ecs` block.
+Upstream jobs (`select-n-repos`, `simulate-commits`, `await-ci`) are env-agnostic
+and shared; only `simulate-deployments` fans out into one job per type. Each type
+workflow **self-filters** the full `selected_repos` to the entries it owns
+(`snapshot-k8s` keeps entries with a `k8s` block) and ignores the rest, so the
+committer hands the full `selected_repos` to every type workflow. Today every
+entry is K8S, so the filter is a no-op.
+
+Steps (per host in `scope`, per env group):
+1. For each selected repo: `GET /api/v2/artifacts/{org}/<repo>-ci` -> latest
+   `fingerprint` + `git_commit` + base time (`created_at`/`git_commit_info`). Set
+   the attested record's `creation_timestamp` = base + a random 60-180s deploy
+   latency (pod "started" a realistic 1-3 min after the build). Done here, not in
+   `build_fresh_facts.py` (which stays pure), and only for fresh repos - unchanged
+   repos keep their stored timestamp via readback, so no drift.
+2. `build_fresh_facts.py` join with the `k8s` blocks -> fresh facts.
+3. `GET /api/v2/snapshots/{org}/<env>/-1` -> current (400/404 -> empty; a fresh
+   env with no snapshots returns 400).
+4. `build_k8s_snapshot.py --current current --fresh fresh` -> report.
+5. `PUT /api/v2/environments/{org}/<env>/report/K8S`.
+
+Open questions for this workflow are tracked in section 14 (creationTimestamp
+source, failed-CI selected repo, per-host readback, K8S rogue path).
+
+## 16. Guardrails
 
 Snapshot reports and environment create/archive are **writes** to Kosli. They
 require a real write-scoped API token and must only be sent on explicit
