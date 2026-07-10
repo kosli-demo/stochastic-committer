@@ -72,10 +72,6 @@ jobs:
       selected_repos: ${{ steps.set-repos.outputs.selected_repos }}
       non_existent_repos: ${{ steps.set-repos.outputs.non_existent_repos }}
     steps:
-      - name: Deliberately fail the job while working on replacement workflow
-        run:
-          exit 42
-
       - name: Harden Runner
         uses: step-security/harden-runner@v2
         with:
