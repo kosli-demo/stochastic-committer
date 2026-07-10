@@ -1,27 +1,56 @@
-# DEMO part 2: reset the environment back to compliant.
+# DEMO part 2: reset staging-k8s back to compliant.
 #
-# Snapshots the fake "staging" environment with the whole fleet using every
-# repo's REAL (already-attested) artifact file and no rogue artifact, so the
-# artifact previously shown with no provenance is gone and the environment goes
-# back to green.
+# Reads the current staging-k8s snapshot and re-reports it with the rogue-trader
+# artifact removed (build_k8s_snapshot.py --drop), so the environment goes back
+# to green. Cheap and targeted: one GET + one PUT, no commit/CI fan-out.
 #
-# This is the cheap, targeted reset: it re-harvests the fleet's files and
-# snapshots, with no repo_count/repo_chance commit+CI fan-out. scope is
-# hard-wired to prod (same environment as demo-deploy-rogue.yml).
+# Targets app.kosli.com (same env as demo-deploy-rogue.yml).
 
 name: Demo - reset env to compliant
 
 on:
   workflow_dispatch: {}
 
+env:
+  KOSLI_ORG: ${{ vars.KOSLI_ORG }}
+  KOSLI_API_TOKEN_PROD: ${{ secrets.KOSLI_API_TOKEN_PROD }}
+
 jobs:
   reset-to-green:
-    uses: ./.github/workflows/demo-snapshot.yml
-    with:
-      scope: prod
-      repo_count: '200'
-      # Empty string = no rogue artifact -- snapshot only the real, attested fleet.
-      rogue_artifact: ''
-    secrets:
-      KOSLI_API_TOKEN_STAGING: ${{ secrets.KOSLI_API_TOKEN_STAGING }}
-      KOSLI_API_TOKEN_PROD: ${{ secrets.KOSLI_API_TOKEN_PROD }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@v6
+
+      - name: Remove rogue-trader from staging-k8s
+        run: |
+          set -Eeuo pipefail
+          HOST="https://app.kosli.com"
+          ENVN="staging-k8s"
+
+          # Read the current snapshot (400/404 -> empty).
+          code="$(curl --silent --show-error --retry 5 --retry-max-time 120 \
+            --output current.json --write-out '%{http_code}' \
+            --header "Authorization: Bearer ${KOSLI_API_TOKEN_PROD}" \
+            "${HOST}/api/v2/snapshots/${KOSLI_ORG}/${ENVN}/-1")"
+          if [ "${code}" = "200" ]; then
+            : # use current.json as read back
+          elif [ "${code}" = "400" ] || [ "${code}" = "404" ]; then
+            echo '{"artifacts":[]}' > current.json
+          else
+            echo "GET snapshot failed: ${code}" ; cat current.json ; exit 1
+          fi
+
+          python3 bin/build_k8s_snapshot.py --current current.json --drop rogue-trader > report.json
+
+          curl --fail --silent --show-error --retry 5 --retry-max-time 120 \
+            --request PUT \
+            --header "Authorization: Bearer ${KOSLI_API_TOKEN_PROD}" \
+            --header "Content-Type: application/json" \
+            --data @report.json \
+            "${HOST}/api/v2/environments/${KOSLI_ORG}/${ENVN}/report/K8S"
+          echo "removed rogue-trader from ${ENVN} on ${HOST}"

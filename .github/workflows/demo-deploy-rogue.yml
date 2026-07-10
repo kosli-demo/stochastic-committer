@@ -1,35 +1,72 @@
-# DEMO part 1: deploy a single artifact with no provenance.
+# DEMO part 1: deploy a single no-provenance artifact to staging-k8s.
 #
-# Snapshots the fake "staging" environment with the whole fleet plus ONE extra
-# artifact (default rogue-trader) that has no provenance, so the environment goes
-# non-compliant. The extra artifact need not be a real repo. Run
-# demo-reset-to-green.yml afterwards to remove it and restore compliance.
+# Reads the current staging-k8s snapshot and re-reports it PLUS one extra
+# artifact named "rogue-trader" whose digest was never attested to any flow, so
+# the environment goes non-compliant. Run demo-reset-to-green.yml to remove it.
 #
-# NOTE: scope is hard-wired to prod, so this snapshots the fake "staging"
-# environment on https://app.kosli.com -- the same one the 6-hourly main-cronjob
-# writes. Kosli snapshots are immutable numbered history, so the cron does NOT
-# erase your rogue snapshot; it only appends later (green) snapshots. The current
-# view may therefore flip back to green -- navigate to your rogue snapshot to show
-# it, or pause the schedule in main-cronjob.yml for a clean live view.
+# Because the steady-state snapshot reconciles the readback (copying unchanged
+# artifacts verbatim), the rogue PERSISTS across normal cron runs -- the env
+# stays non-compliant until you reset. Reset is therefore mandatory, not optional.
+#
+# Targets app.kosli.com (the host the cron reports staging-k8s to).
 
 name: Demo - deploy no-provenance artifact
 
 on:
-  workflow_dispatch:
-    inputs:
-      rogue_artifact:
-        description: 'Name of the no-provenance artifact to deploy (need not be a real repo)'
-        type: string
-        required: false
-        default: rogue-trader
+  workflow_dispatch: {}
+
+env:
+  KOSLI_ORG: ${{ vars.KOSLI_ORG }}
+  KOSLI_API_TOKEN_PROD: ${{ secrets.KOSLI_API_TOKEN_PROD }}
 
 jobs:
   deploy-rogue:
-    uses: ./.github/workflows/demo-snapshot.yml
-    with:
-      scope: prod
-      repo_count: '200'
-      rogue_artifact: ${{ inputs.rogue_artifact }}
-    secrets:
-      KOSLI_API_TOKEN_STAGING: ${{ secrets.KOSLI_API_TOKEN_STAGING }}
-      KOSLI_API_TOKEN_PROD: ${{ secrets.KOSLI_API_TOKEN_PROD }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@v6
+
+      - name: Deploy rogue-trader to staging-k8s
+        run: |
+          set -Eeuo pipefail
+          HOST="https://app.kosli.com"
+          ENVN="staging-k8s"
+
+          # Read the current snapshot (400/404 -> empty, i.e. bootstrap).
+          code="$(curl --silent --show-error --retry 5 --retry-max-time 120 \
+            --output current.json --write-out '%{http_code}' \
+            --header "Authorization: Bearer ${KOSLI_API_TOKEN_PROD}" \
+            "${HOST}/api/v2/snapshots/${KOSLI_ORG}/${ENVN}/-1")"
+          if [ "${code}" = "200" ]; then
+            : # use current.json as read back
+          elif [ "${code}" = "400" ] || [ "${code}" = "404" ]; then
+            echo '{"artifacts":[]}' > current.json
+          else
+            echo "GET snapshot failed: ${code}" ; cat current.json ; exit 1
+          fi
+
+          # A rogue artifact: a valid-looking digest that was never attested to
+          # any flow, so Kosli finds no provenance for it -> non-compliant.
+          jq -n --arg ts "$(date +%s)" '[{
+            repo_name: "rogue-trader",
+            image_ref: "ghcr.io/kosli-demo/rogue-trader:rogue",
+            digest: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+            creation_timestamp: ($ts | tonumber),
+            namespace: "beta",
+            pod_name: "rogue-trader-6f7a8b9c0-z1x2c",
+            owners: [{apiVersion: "apps/v1", kind: "ReplicaSet", name: "rogue-trader-6f7a8b9c0", uid: "3d0e2f4a-5b6c-7d8e-9f0a-1b2c3d4e5f60", controller: true, blockOwnerDeletion: true}]
+          }]' > rogue.json
+
+          python3 bin/build_k8s_snapshot.py --current current.json --fresh rogue.json > report.json
+
+          curl --fail --silent --show-error --retry 5 --retry-max-time 120 \
+            --request PUT \
+            --header "Authorization: Bearer ${KOSLI_API_TOKEN_PROD}" \
+            --header "Content-Type: application/json" \
+            --data @report.json \
+            "${HOST}/api/v2/environments/${KOSLI_ORG}/${ENVN}/report/K8S"
+          echo "deployed rogue-trader to ${ENVN} on ${HOST}"

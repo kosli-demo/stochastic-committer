@@ -13,6 +13,7 @@ readonly DIGEST="d1a92f4f43c7c91c8bf5d1f938e2a3a8fa9ed88fce6bd4a3cdb5207ad2c99d3
 
 readonly PRICE_INDEX_REF="ghcr.io/kosli-demo/price-index:abc1234"
 readonly PRICE_INDEX_DIGEST="3f0a1c5e9b2d4a6f8c1e0b7d5a9f2c4e6b8d0a1c3e5f7a9b1d3f5a7c9e1b3d5f"
+readonly ROGUE_REF="ghcr.io/kosli-demo/rogue-trader:rogue"
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Bootstrap case: no current snapshot, so every fresh repo is introduced.
@@ -89,6 +90,21 @@ test_rejects_a_fact_with_an_invalid_digest()
   assert_status_equals 1
   assert_stdout_empty
   assert_stderr_equals "error: digest for '${IMAGE_REF}' must be 64 lowercase hex chars (no 'sha256:' prefix), got 'sha256:${DIGEST}'"
+}
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# --drop removes a named artifact from the output (used by reset-to-green to
+# remove the rogue-trader artifact from the readback).
+
+test_drop_removes_a_named_artifact()
+{
+  build --current "${my_dir}/fixtures/current-snapshot-with-rogue.json" --drop rogue-trader
+  assert_status_0
+  assertEquals "artifact count"  "1" "$(jq '.artifacts | length' "${stdoutF}")"
+  assertEquals "price-index kept" "${PRICE_INDEX_DIGEST}" \
+    "$(jq -r --arg r "${PRICE_INDEX_REF}" '.artifacts[] | .digests[$r] // empty' "${stdoutF}")"
+  assertEquals "rogue dropped"    "" \
+    "$(jq -r --arg r "${ROGUE_REF}" '.artifacts[] | .digests[$r] // empty' "${stdoutF}")"
 }
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

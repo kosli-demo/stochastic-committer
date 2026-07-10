@@ -109,6 +109,13 @@ def _parse_args(argv):
         default=None,
         help="JSON list of full facts for repos new or changed this run",
     )
+    parser.add_argument(
+        "--drop",
+        metavar="REPO_NAME",
+        action="append",
+        default=[],
+        help="repo_name to remove from the output (repeatable); e.g. rogue-trader",
+    )
     return parser.parse_args(argv)
 
 
@@ -124,6 +131,9 @@ def main(argv):
     current_facts = facts_from_snapshot(_load(args.current)) if args.current else []
     fresh_facts = _load(args.fresh) if args.fresh else []
     facts = reconcile(current_facts, fresh_facts)
+    if args.drop:
+        dropped = set(args.drop)
+        facts = [fact for fact in facts if fact["repo_name"] not in dropped]
     try:
         report = build_report(facts)
     except ValueError as exc:
