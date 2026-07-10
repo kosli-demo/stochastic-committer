@@ -89,9 +89,10 @@ jobs:
           ./bin/select_repos.py all_repos.json ${REPO_COUNT} ${REPO_CHANCE} > n_repos.json
           SELECTED_REPOS="$(jq --compact-output '[.[] | select(.selected == true)]' n_repos.json)"
 
-          # Must set non-existent-repos from n_repos.json (all N repos), not SELECTED_REPOS.
-          # The simulate-deployments-from-selected-repos job snapshots all N repos, so all
-          # N repos must exist before it runs -- not just the ones selected for a commit.
+          # non-existent repos (exists == false) are the ones create-new-repos must
+          # create this run. select_repos.py force-selects them, so they are also in
+          # SELECTED_REPOS and get committed + CI'd (attested) once created -- which is
+          # how a newly-added repo enters the environment the same run.
           NON_EXISTENT_REPOS="$(jq --compact-output '[.[] | select(.exists == false)]' n_repos.json)"
           
           echo "selected_repos=${SELECTED_REPOS}" >> ${GITHUB_OUTPUT}
@@ -195,10 +196,10 @@ jobs:
       KOSLI_API_TOKEN_PROD: ${{ secrets.KOSLI_API_TOKEN_PROD }}
 
 
-  # Waits for every selected repo's dispatched CI to finish before the snapshot harvests, so
-  # the snapshot never reads a source/datetime.txt whose Kosli attestation has not landed yet.
-  # Each selected repo committed a new datetime.txt and dispatched its main.yml CI, which
-  # attests that file's fingerprint.
+  # Waits for every selected repo's dispatched CI to finish before the snapshot runs, so
+  # the snapshot never reads a flow attestation that has not landed yet.
+  # Each selected repo committed a new datetime.txt (changing its image) and dispatched its
+  # main.yml CI, which attests the real image digest to the repo's Kosli flow.
   #
   # Polls with ONE batched GraphQL query covering the whole selected fleet. GraphQL bills
   # against a 5000-points/hour budget that is separate from the REST 5000-requests/hour primary
