@@ -145,11 +145,15 @@ jobs:
 
 
   seed-into-ecs:
-    needs: [flip-base-data]
+    needs: [flip-base-data, evict-from-k8s]
     # Report the switched repos to staging-ecs now, reusing the standard ecs
     # snapshot pipeline. snapshot-ecs derives the env from each entry's ecs block
     # and fetches each repo's latest flow attestation (present from its k8s life),
     # so no fresh commit is needed.
+    #
+    # Runs only after evict-from-k8s so a repo is never in both envs at once: it
+    # leaves staging-k8s before it enters staging-ecs. If evict fails, this is
+    # skipped rather than creating a lingering double-count.
     uses: ./.github/workflows/snapshot-ecs.yml
     with:
       scope: prod
