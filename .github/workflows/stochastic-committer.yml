@@ -14,11 +14,6 @@ name: ▶️ Simulate commits on many repos
 on:
   workflow_call:
     inputs:
-      scope:
-        description: 'Where to attest to'
-        type: string
-        required: false
-        default: prod
       repo_count:
         description: 'Number of demo repos to select'
         type: number
@@ -39,14 +34,6 @@ on:
 
   workflow_dispatch:
     inputs:
-      scope:
-        description: 'Where to attest to'
-        type: choice
-        required: true
-        options:
-          - prod
-          - staging
-          - both
       repo_count:
         description: 'Number of demo repos to select'
         required: false
@@ -185,7 +172,7 @@ jobs:
         include: ${{ fromJSON(needs.select-n-repos.outputs.selected_repos) }}
     uses: ./.github/workflows/commit-to-repo-and-trigger-ci.yml
     with:
-      scope: ${{ inputs.scope }}
+      scope: prod
       repo_name: ${{ matrix.repo_name }}
       # Lets trigger-ci skip the workflow-availability poll for repos that already exist
       # (only newly-created repos need it), cutting GitHub API calls per leg.
@@ -321,7 +308,7 @@ jobs:
     if: ${{ always() && needs.select-n-repos.result == 'success' }}
     uses: ./.github/workflows/snapshot-k8s.yml
     with:
-      scope: ${{ inputs.scope }}
+      scope: prod
       selected_repos: ${{ needs.select-n-repos.outputs.selected_repos }}
     secrets:
       KOSLI_API_TOKEN_STAGING: ${{ secrets.KOSLI_API_TOKEN_STAGING }}

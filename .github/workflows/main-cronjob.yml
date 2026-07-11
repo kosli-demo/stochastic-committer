@@ -9,7 +9,6 @@ jobs:
   run:
     uses: ./.github/workflows/stochastic-committer.yml
     with:
-      scope: prod
       repo_count: 200
       repo_chance: 5
     secrets:
