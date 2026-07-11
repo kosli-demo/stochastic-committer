@@ -17,7 +17,7 @@ Two separate matrix jobs exist in `main.yml`:
 - `simulate-commits-to-selected-repos` -- makes a simulated commit to each
   chosen repo and triggers its CI pipeline
 
-A third job, `simulate-deployments-from-selected-repos`, must also process all
+A third job, `simulate-k8s-deployments-from-selected-repos`, must also process all
 `repo_count` repos but deliberately does **not** use a matrix (see below).
 
 In addition to the 256-job matrix limit, the GitHub REST API enforces secondary
@@ -68,7 +68,7 @@ rapid parallel.
 
 ### 4. Deployments/snapshots use a single job with a shell loop, not a matrix
 
-`simulate-deployments-from-selected-repos` must process all `repo_count` repos
+`simulate-k8s-deployments-from-selected-repos` must process all `repo_count` repos
 (not just the selected subset) because the Kosli snapshot covers the state of
 every repo, whether or not it received a commit this run.
 
@@ -101,4 +101,4 @@ removes the rate-limit risk that came with it.
   is safe but slow due to the `max-parallel: 5` cap on creation.
 - The deployment snapshot always covers all `repo_count` repos, so it grows
   linearly in time with `repo_count`. At very high counts the shell loop in
-  `simulate-deployments-from-selected-repos` may become a bottleneck.
+  `simulate-k8s-deployments-from-selected-repos` may become a bottleneck.

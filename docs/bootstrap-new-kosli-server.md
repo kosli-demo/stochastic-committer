@@ -27,7 +27,7 @@ repos each run (see `stochastic-committer.yml`):
    run** -- the ones that won the `repo_chance`% random draw in
    `bin/select_repos.py`.
 
-2. **`simulate-deployments-from-selected-repos`** reports the running state of
+2. **`simulate-k8s-deployments-from-selected-repos`** reports the running state of
    the environment via `kosli snapshot paths`. This covers **all `repo_count`
    repos every run**, whether or not they were selected for a commit.
 
@@ -83,7 +83,7 @@ compliant.
    (Use `scope=staging` for `staging.app.kosli.com`, or `scope=both`.)
 
 3. **Wait for the run to finish and check the environment.** After
-   `simulate-deployments-from-selected-repos` completes, the `staging`
+   `simulate-k8s-deployments-from-selected-repos` completes, the `staging`
    environment on the target server should show 200 artifacts, all compliant on
    the `provenance` policy.
 

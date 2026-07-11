@@ -264,7 +264,7 @@ PUT  /api/v2/environments/kosli-demo/staging-k8s/report/K8S
       random 60-180s deploy latency, applied in `snapshot-k8s.yml` for fresh repos
       only (unchanged repos keep their stored value via readback, so no drift).
 - [ ] Cleanup (don't forget): `stochastic-committer2.yml`'s `select-n-repos` job
-      still carries a comment claiming the `simulate-deployments-from-selected-repos`
+      still carries a comment claiming the `simulate-k8s-deployments-from-selected-repos`
       job "snapshots all N repos, so all N repos must exist before it runs". Stale:
       the K8S snapshot reconciles readback + fresh (it never harvests all N), and
       with force-selection only the selected/new repos are created + committed.

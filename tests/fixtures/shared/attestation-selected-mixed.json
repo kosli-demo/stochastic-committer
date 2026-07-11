@@ -17,9 +17,9 @@
     "exists": true,
     "env": "staging-ecs",
     "ecs": {
-      "cluster": "beta",
-      "service": "risk-service",
-      "task_family": "risk-service"
+      "taskArn": "arn:aws:ecs:eu-central-1:111122223333:task/beta/2f698d3b9c3c4a16912df9c23d6f6508",
+      "cluster_name": "beta",
+      "service_name": "risk-service"
     }
   }
 ]

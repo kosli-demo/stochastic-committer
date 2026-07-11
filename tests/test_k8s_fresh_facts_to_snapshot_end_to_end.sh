@@ -32,7 +32,7 @@ run_pipeline()
 {
   "${FRESH_FACTS}" \
       --all-repos "${my_dir}/fixtures/k8s/all-repos-golden-ledger.json" \
-      --attested  "${my_dir}/fixtures/shared/one-repo-attested.json" \
+      --attested  "${my_dir}/fixtures/shared/one-repo-attested-golden-ledger.json" \
       > "${SHUNIT_TMPDIR}/fresh.json" 2>"${stderrF}" \
     && "${SNAPSHOT}" --fresh "${SHUNIT_TMPDIR}/fresh.json" >"${stdoutF}" 2>>"${stderrF}"
   echo $? >"${statusF}"

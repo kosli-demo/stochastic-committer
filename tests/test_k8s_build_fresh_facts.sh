@@ -15,7 +15,7 @@ readonly DIGEST="d1a92f4f43c7c91c8bf5d1f938e2a3a8fa9ed88fce6bd4a3cdb5207ad2c99d3
 test_joins_attested_record_with_all_repos_k8s_block()
 {
   build --all-repos "${my_dir}/fixtures/k8s/all-repos-golden-ledger.json" \
-        --attested  "${my_dir}/fixtures/shared/one-repo-attested.json"
+        --attested  "${my_dir}/fixtures/shared/one-repo-attested-golden-ledger.json"
   assert_status_0
   assertEquals "fact count"         "1" "$(jq 'length' "${stdoutF}")"
   assertEquals "repo_name"          "golden-ledger" "$(jq -r '.[0].repo_name' "${stdoutF}")"
