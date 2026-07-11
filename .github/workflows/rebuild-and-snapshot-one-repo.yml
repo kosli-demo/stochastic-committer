@@ -50,9 +50,18 @@ jobs:
             exit 1
           fi
 
+          # Reject a repo that is listed but not yet created on GitHub, up front
+          # with a clear message, rather than letting commit-to-repo fail later
+          # at `gh repo clone`.
+          EXISTS="$(jq --raw-output '.exists' <<< "${ENTRY}")"
+          if [ "${EXISTS}" != "true" ]; then
+            echo "repo '${REPO_NAME}' is in all-repos.json but not created on GitHub yet (exists=${EXISTS}); nothing to rebuild"
+            exit 1
+          fi
+
           SELECTED="$(jq --compact-output --null-input --argjson e "${ENTRY}" '[ $e ]')"
           echo "selected_repos=${SELECTED}" >> "${GITHUB_OUTPUT}"
-          echo "exists=$(jq --raw-output '.exists' <<< "${ENTRY}")" >> "${GITHUB_OUTPUT}"
+          echo "exists=${EXISTS}" >> "${GITHUB_OUTPUT}"
 
   # Lay base's current tree over the repo + bump datetime.txt (new sha -> new
   # tag), then dispatch the repo's main.yml CI (build + attest to prod).
