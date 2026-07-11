@@ -81,13 +81,44 @@ def facts_from_snapshot(snapshot):
 
 
 def reconcile(current_facts, fresh_facts):
-    """Merge fresh facts over current facts, keyed by repo_name (fresh wins)."""
+    """Merge fresh facts over current facts, keyed by repo_name.
+
+    Among current facts the newest by creationTimestamp wins, so a repo left with
+    several artifacts (e.g. an earlier cutover PUT that failed) collapses to its
+    latest version regardless of readback order. A fresh fact always wins over
+    current -- it is this run's deploy.
+    """
     by_repo = {}
     for fact in current_facts:
-        by_repo[fact["repo_name"]] = fact
+        existing = by_repo.get(fact["repo_name"])
+        if existing is None or fact["creation_timestamp"] >= existing["creation_timestamp"]:
+            by_repo[fact["repo_name"]] = fact
     for fact in fresh_facts:
         by_repo[fact["repo_name"]] = fact
     return list(by_repo.values())
+
+
+def reconcile_overlap(current_facts, fresh_facts):
+    """Reconcile, but keep the single newest superseded (blue) fact alongside green.
+
+    For a redeployed repo, the newest prior version (by creationTimestamp) lingers
+    in the report next to the incoming (green) one -- the overlap snapshot of a
+    blue-green deploy. The follow-up report (plain reconcile) then omits blue, so
+    the server marks it exited. Only the newest prior is kept, so a repo left with
+    several artifacts (e.g. an earlier cutover PUT that failed) collapses toward
+    two here (and one on the follow-up PUT) rather than piling up.
+    """
+    facts = reconcile(current_facts, fresh_facts)
+    for incoming in fresh_facts:
+        priors = [
+            fact
+            for fact in current_facts
+            if fact["repo_name"] == incoming["repo_name"]
+            and fact["digest"] != incoming["digest"]
+        ]
+        if priors:
+            facts.append(max(priors, key=lambda fact: fact["creation_timestamp"]))
+    return facts
 
 
 def _parse_args(argv):
@@ -116,6 +147,11 @@ def _parse_args(argv):
         default=[],
         help="repo_name to remove from the output (repeatable); e.g. rogue-trader",
     )
+    parser.add_argument(
+        "--blue-green",
+        action="store_true",
+        help="Keep each superseded artifact alongside its replacement (the overlap snapshot)",
+    )
     return parser.parse_args(argv)
 
 
@@ -130,7 +166,10 @@ def main(argv):
     args = _parse_args(argv)
     current_facts = facts_from_snapshot(_load(args.current)) if args.current else []
     fresh_facts = _load(args.fresh) if args.fresh else []
-    facts = reconcile(current_facts, fresh_facts)
+    if args.blue_green:
+        facts = reconcile_overlap(current_facts, fresh_facts)
+    else:
+        facts = reconcile(current_facts, fresh_facts)
     if args.drop:
         dropped = set(args.drop)
         facts = [fact for fact in facts if fact["repo_name"] not in dropped]

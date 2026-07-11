@@ -1,0 +1,38 @@
+{
+  "index": 21,
+  "type": "K8S",
+  "artifacts": [
+    {
+      "name": "ghcr.io/kosli-demo/golden-ledger:c0ffee0",
+      "fingerprint": "c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00",
+      "creationTimestamp": [1783500000],
+      "annotation": { "type": "unchanged", "was": 1, "now": 1 },
+      "pods": {
+        "golden-ledger-6c6c6c6c6-newr1": {
+          "namespace": "beta",
+          "creationTimestamp": 1783500000,
+          "owners": [
+            { "apiVersion": "apps/v1", "kind": "ReplicaSet", "name": "golden-ledger-6c6c6c6c6",
+              "uid": "cccc2222-3333-4444-5555-666677778888", "controller": true, "blockOwnerDeletion": true }
+          ]
+        }
+      }
+    },
+    {
+      "name": "ghcr.io/kosli-demo/golden-ledger:deadbee",
+      "fingerprint": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+      "creationTimestamp": [1783300000],
+      "annotation": { "type": "unchanged", "was": 1, "now": 1 },
+      "pods": {
+        "golden-ledger-6d6d6d6d6-oldr2": {
+          "namespace": "beta",
+          "creationTimestamp": 1783300000,
+          "owners": [
+            { "apiVersion": "apps/v1", "kind": "ReplicaSet", "name": "golden-ledger-6d6d6d6d6",
+              "uid": "dddd3333-4444-5555-6666-777788889999", "controller": true, "blockOwnerDeletion": true }
+          ]
+        }
+      }
+    }
+  ]
+}

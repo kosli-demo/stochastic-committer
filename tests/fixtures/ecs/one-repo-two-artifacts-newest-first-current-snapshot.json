@@ -1,0 +1,32 @@
+{
+  "index": 21,
+  "type": "ECS",
+  "artifacts": [
+    {
+      "name": "ghcr.io/kosli-demo/risk-service:c0ffee0@sha256:c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00",
+      "fingerprint": "c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00",
+      "git_commit": "c0ffee0c0ffee0c0ffee0c0ffee0c0ffee0c0ffe",
+      "creationTimestamp": [1783500000],
+      "annotation": { "type": "unchanged", "was": 1, "now": 1 },
+      "ecs_context": {
+        "task_arn": "arn:aws:ecs:eu-central-1:111122223333:task/beta/c0ffee00c0ffee00c0ffee00c0ffee00",
+        "cluster_name": "beta",
+        "service_name": "risk-service"
+      },
+      "pods": null
+    },
+    {
+      "name": "ghcr.io/kosli-demo/risk-service:deadbee@sha256:deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+      "fingerprint": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+      "git_commit": "deadbeedeadbeedeadbeedeadbeedeadbeedeadb",
+      "creationTimestamp": [1783300000],
+      "annotation": { "type": "unchanged", "was": 1, "now": 1 },
+      "ecs_context": {
+        "task_arn": "arn:aws:ecs:eu-central-1:111122223333:task/beta/deadbeefdeadbeefdeadbeefdeadbeef",
+        "cluster_name": "beta",
+        "service_name": "risk-service"
+      },
+      "pods": null
+    }
+  ]
+}

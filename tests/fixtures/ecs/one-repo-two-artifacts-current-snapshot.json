@@ -1,0 +1,32 @@
+{
+  "index": 20,
+  "type": "ECS",
+  "artifacts": [
+    {
+      "name": "ghcr.io/kosli-demo/risk-service:aaa0000@sha256:aaaa0000aaaa0000aaaa0000aaaa0000aaaa0000aaaa0000aaaa0000aaaa0000",
+      "fingerprint": "aaaa0000aaaa0000aaaa0000aaaa0000aaaa0000aaaa0000aaaa0000aaaa0000",
+      "git_commit": "aaa0000aaaa0000aaaa0000aaaa0000aaaa0000a",
+      "creationTimestamp": [1783300000],
+      "annotation": { "type": "unchanged", "was": 1, "now": 1 },
+      "ecs_context": {
+        "task_arn": "arn:aws:ecs:eu-central-1:111122223333:task/beta/aaaa0000aaaa0000aaaa0000aaaa0000",
+        "cluster_name": "beta",
+        "service_name": "risk-service"
+      },
+      "pods": null
+    },
+    {
+      "name": "ghcr.io/kosli-demo/risk-service:bbb1111@sha256:bbbb1111bbbb1111bbbb1111bbbb1111bbbb1111bbbb1111bbbb1111bbbb1111",
+      "fingerprint": "bbbb1111bbbb1111bbbb1111bbbb1111bbbb1111bbbb1111bbbb1111bbbb1111",
+      "git_commit": "bbb1111bbbb1111bbbb1111bbbb1111bbbb1111b",
+      "creationTimestamp": [1783400000],
+      "annotation": { "type": "unchanged", "was": 1, "now": 1 },
+      "ecs_context": {
+        "task_arn": "arn:aws:ecs:eu-central-1:111122223333:task/beta/bbbb1111bbbb1111bbbb1111bbbb1111",
+        "cluster_name": "beta",
+        "service_name": "risk-service"
+      },
+      "pods": null
+    }
+  ]
+}

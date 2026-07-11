@@ -12,6 +12,22 @@ readonly IMAGE_REF="ghcr.io/kosli-demo/risk-service:aabbccd"
 readonly DIGEST="a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4"
 readonly TASK_ARN="arn:aws:ecs:eu-central-1:111122223333:task/beta/2f698d3b9c3c4a16912df9c23d6f6508"
 
+# risk-service's outgoing (blue) version in two-repo-current-snapshot.json.
+readonly BLUE_REF="ghcr.io/kosli-demo/risk-service:0011223"
+readonly BLUE_DIGEST="0011223300112233001122330011223300112233001122330011223300112233"
+
+# risk-service's two stuck versions in one-repo-two-artifacts-current-snapshot.json:
+# the stale oldest (should drop) and the newest prior (kept as the single blue).
+readonly STALE_REF="ghcr.io/kosli-demo/risk-service:aaa0000"
+readonly PRIOR_REF="ghcr.io/kosli-demo/risk-service:bbb1111"
+readonly PRIOR_DIGEST="bbbb1111bbbb1111bbbb1111bbbb1111bbbb1111bbbb1111bbbb1111bbbb1111"
+
+# one-repo-two-artifacts-newest-first-current-snapshot.json lists the NEWER version
+# first and the older second, to expose any reliance on readback array order.
+readonly NEWER_REF="ghcr.io/kosli-demo/risk-service:c0ffee0"
+readonly NEWER_DIGEST="c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00"
+readonly OLDER_REF="ghcr.io/kosli-demo/risk-service:deadbee"
+
 readonly CURRENT_REF="ghcr.io/kosli-demo/market-feed:d4e5f6a"
 readonly CURRENT_DIGEST="b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5"
 readonly CURRENT_TASK_ARN="arn:aws:ecs:eu-central-1:111122223333:task/beta/1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d"
@@ -108,6 +124,62 @@ test_drop_removes_a_named_artifact()
     "$(jq -r --arg r "${CURRENT_REF}" '.artifacts[] | .digests[$r] // empty' "${stdoutF}")"
   assertEquals "rogue dropped"    "" \
     "$(jq -r --arg r "${ROGUE_REF}" '.artifacts[] | .digests[$r] // empty' "${stdoutF}")"
+}
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# --blue-green keeps the superseded (old/blue) artifact alongside the new (green)
+# one for a repo that changed this run -- the overlap snapshot of a blue-green
+# deploy. risk-service changed (0011223 -> aabbccd); both digests are reported.
+
+test_blue_green_keeps_both_old_and_new_for_a_changed_repo()
+{
+  build --current "${my_dir}/fixtures/ecs/two-repo-current-snapshot.json" \
+        --fresh   "${my_dir}/fixtures/ecs/one-repo-fresh-facts.json" \
+        --blue-green
+  assert_status_0
+  assertEquals "artifact count"           "3" "$(jq '.artifacts | length' "${stdoutF}")"
+  assertEquals "risk-service new (green)" "${DIGEST}" \
+    "$(jq -r --arg r "${IMAGE_REF}" '.artifacts[] | .digests[$r] // empty' "${stdoutF}")"
+  assertEquals "risk-service old (blue) kept" "${BLUE_DIGEST}" \
+    "$(jq -r --arg r "${BLUE_REF}" '.artifacts[] | .digests[$r] // empty' "${stdoutF}")"
+  assertEquals "market-feed preserved"    "${CURRENT_DIGEST}" \
+    "$(jq -r --arg r "${CURRENT_REF}" '.artifacts[] | .digests[$r] // empty' "${stdoutF}")"
+}
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Self-heal: if a prior blue-green's cutover PUT failed, the env is stuck with two
+# artifacts for the repo. A redeploy under --blue-green must keep only the NEWEST
+# prior as blue (dropping the stale oldest), so the overlap caps at 2, not 3.
+
+test_blue_green_from_a_stuck_two_artifact_state_keeps_only_the_newest_prior()
+{
+  build --current "${my_dir}/fixtures/ecs/one-repo-two-artifacts-current-snapshot.json" \
+        --fresh   "${my_dir}/fixtures/ecs/one-repo-fresh-facts.json" \
+        --blue-green
+  assert_status_0
+  assertEquals "artifact count"           "2" "$(jq '.artifacts | length' "${stdoutF}")"
+  assertEquals "redeploy (green) present" "${DIGEST}" \
+    "$(jq -r --arg r "${IMAGE_REF}" '.artifacts[] | .digests[$r] // empty' "${stdoutF}")"
+  assertEquals "newest prior (blue) kept" "${PRIOR_DIGEST}" \
+    "$(jq -r --arg r "${PRIOR_REF}" '.artifacts[] | .digests[$r] // empty' "${stdoutF}")"
+  assertEquals "stale oldest dropped"     "" \
+    "$(jq -r --arg r "${STALE_REF}" '.artifacts[] | .digests[$r] // empty' "${stdoutF}")"
+}
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Self-heal (no redeploy): a stuck two-artifact repo re-reported with no fresh
+# collapses to the NEWEST version by creationTimestamp, regardless of the order
+# the artifacts appear in the readback.
+
+test_stuck_two_artifact_state_collapses_to_newest_without_a_redeploy()
+{
+  build --current "${my_dir}/fixtures/ecs/one-repo-two-artifacts-newest-first-current-snapshot.json"
+  assert_status_0
+  assertEquals "artifact count" "1" "$(jq '.artifacts | length' "${stdoutF}")"
+  assertEquals "newest kept"    "${NEWER_DIGEST}" \
+    "$(jq -r --arg r "${NEWER_REF}" '.artifacts[] | .digests[$r] // empty' "${stdoutF}")"
+  assertEquals "older dropped"  "" \
+    "$(jq -r --arg r "${OLDER_REF}" '.artifacts[] | .digests[$r] // empty' "${stdoutF}")"
 }
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

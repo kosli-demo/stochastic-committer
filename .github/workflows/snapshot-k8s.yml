@@ -142,13 +142,27 @@ jobs:
               exit 1
             fi
 
+            # Build the overlap snapshot (old + new for any repo that changed this
+            # run) and the final snapshot (new only), both from the same readback.
+            python3 bin/k8s_build_snapshot.py --current current.json --fresh fresh.json --blue-green > overlap.json
             python3 bin/k8s_build_snapshot.py --current current.json --fresh fresh.json > report.json
 
-            curl --fail --silent --show-error --retry 5 --retry-max-time 120 \
-              --request PUT \
-              --header "Authorization: Bearer ${token}" \
-              --header "Content-Type: application/json" \
-              --data @report.json \
-              "${host}/api/v2/environments/${KOSLI_ORG}/${ENV}/report/K8S"
+            put() {
+              curl --fail --silent --show-error --retry 5 --retry-max-time 120 \
+                --request PUT \
+                --header "Authorization: Bearer ${token}" \
+                --header "Content-Type: application/json" \
+                --data @"${1}" \
+                "${host}/api/v2/environments/${KOSLI_ORG}/${ENV}/report/K8S"
+            }
+
+            # When a repo changed, PUT the overlap (2 artifacts) first so it lingers
+            # for one snapshot, then the final (1 artifact) which drains the old one.
+            # When nothing changed the two are identical, so PUT once.
+            if ! cmp --silent overlap.json report.json; then
+              put overlap.json
+              echo "reported overlap ${ENV} to ${host}"
+            fi
+            put report.json
             echo "reported ${ENV} to ${host}"
           done

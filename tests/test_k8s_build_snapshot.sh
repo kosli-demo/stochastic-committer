@@ -11,6 +11,22 @@ readonly BUILDER="${my_dir}/../bin/k8s_build_snapshot.py"
 readonly IMAGE_REF="ghcr.io/kosli-demo/golden-ledger:52ec808"
 readonly DIGEST="d1a92f4f43c7c91c8bf5d1f938e2a3a8fa9ed88fce6bd4a3cdb5207ad2c99d3d"
 
+# golden-ledger's outgoing (blue) version in two-repo-current-snapshot.json.
+readonly BLUE_REF="ghcr.io/kosli-demo/golden-ledger:0011223"
+readonly BLUE_DIGEST="beadfeed00112233445566778899aabbccddeeff00112233445566778899aabb"
+
+# golden-ledger's two stuck versions in one-repo-two-artifacts-current-snapshot.json:
+# the stale oldest (should drop) and the newest prior (kept as the single blue).
+readonly STALE_REF="ghcr.io/kosli-demo/golden-ledger:aaa0000"
+readonly PRIOR_REF="ghcr.io/kosli-demo/golden-ledger:bbb1111"
+readonly PRIOR_DIGEST="bbbb1111bbbb1111bbbb1111bbbb1111bbbb1111bbbb1111bbbb1111bbbb1111"
+
+# one-repo-two-artifacts-newest-first-current-snapshot.json lists the NEWER version
+# first and the older second, to expose any reliance on readback array order.
+readonly NEWER_REF="ghcr.io/kosli-demo/golden-ledger:c0ffee0"
+readonly NEWER_DIGEST="c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00"
+readonly OLDER_REF="ghcr.io/kosli-demo/golden-ledger:deadbee"
+
 readonly PRICE_INDEX_REF="ghcr.io/kosli-demo/price-index:abc1234"
 readonly PRICE_INDEX_DIGEST="3f0a1c5e9b2d4a6f8c1e0b7d5a9f2c4e6b8d0a1c3e5f7a9b1d3f5a7c9e1b3d5f"
 readonly ROGUE_REF="ghcr.io/kosli-demo/rogue-trader:rogue"
@@ -105,6 +121,62 @@ test_drop_removes_a_named_artifact()
     "$(jq -r --arg r "${PRICE_INDEX_REF}" '.artifacts[] | .digests[$r] // empty' "${stdoutF}")"
   assertEquals "rogue dropped"    "" \
     "$(jq -r --arg r "${ROGUE_REF}" '.artifacts[] | .digests[$r] // empty' "${stdoutF}")"
+}
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# --blue-green keeps the superseded (old/blue) artifact alongside the new (green)
+# one for a repo that changed this run -- the overlap snapshot of a blue-green
+# deploy. golden-ledger changed (0011223 -> 52ec808); both digests are reported.
+
+test_blue_green_keeps_both_old_and_new_for_a_changed_repo()
+{
+  build --current "${my_dir}/fixtures/k8s/two-repo-current-snapshot.json" \
+        --fresh   "${my_dir}/fixtures/k8s/one-repo-fresh-facts.json" \
+        --blue-green
+  assert_status_0
+  assertEquals "artifact count"            "3" "$(jq '.artifacts | length' "${stdoutF}")"
+  assertEquals "golden-ledger new (green)" "${DIGEST}" \
+    "$(jq -r --arg r "${IMAGE_REF}" '.artifacts[] | .digests[$r] // empty' "${stdoutF}")"
+  assertEquals "golden-ledger old (blue) kept" "${BLUE_DIGEST}" \
+    "$(jq -r --arg r "${BLUE_REF}" '.artifacts[] | .digests[$r] // empty' "${stdoutF}")"
+  assertEquals "price-index preserved"     "${PRICE_INDEX_DIGEST}" \
+    "$(jq -r --arg r "${PRICE_INDEX_REF}" '.artifacts[] | .digests[$r] // empty' "${stdoutF}")"
+}
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Self-heal: if a prior blue-green's cutover PUT failed, the env is stuck with two
+# artifacts for the repo. A redeploy under --blue-green must keep only the NEWEST
+# prior as blue (dropping the stale oldest), so the overlap caps at 2, not 3.
+
+test_blue_green_from_a_stuck_two_artifact_state_keeps_only_the_newest_prior()
+{
+  build --current "${my_dir}/fixtures/k8s/one-repo-two-artifacts-current-snapshot.json" \
+        --fresh   "${my_dir}/fixtures/k8s/one-repo-fresh-facts.json" \
+        --blue-green
+  assert_status_0
+  assertEquals "artifact count"           "2" "$(jq '.artifacts | length' "${stdoutF}")"
+  assertEquals "redeploy (green) present" "${DIGEST}" \
+    "$(jq -r --arg r "${IMAGE_REF}" '.artifacts[] | .digests[$r] // empty' "${stdoutF}")"
+  assertEquals "newest prior (blue) kept" "${PRIOR_DIGEST}" \
+    "$(jq -r --arg r "${PRIOR_REF}" '.artifacts[] | .digests[$r] // empty' "${stdoutF}")"
+  assertEquals "stale oldest dropped"     "" \
+    "$(jq -r --arg r "${STALE_REF}" '.artifacts[] | .digests[$r] // empty' "${stdoutF}")"
+}
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Self-heal (no redeploy): a stuck two-artifact repo re-reported with no fresh
+# collapses to the NEWEST version by creationTimestamp, regardless of the order
+# the artifacts appear in the readback.
+
+test_stuck_two_artifact_state_collapses_to_newest_without_a_redeploy()
+{
+  build --current "${my_dir}/fixtures/k8s/one-repo-two-artifacts-newest-first-current-snapshot.json"
+  assert_status_0
+  assertEquals "artifact count" "1" "$(jq '.artifacts | length' "${stdoutF}")"
+  assertEquals "newest kept"    "${NEWER_DIGEST}" \
+    "$(jq -r --arg r "${NEWER_REF}" '.artifacts[] | .digests[$r] // empty' "${stdoutF}")"
+  assertEquals "older dropped"  "" \
+    "$(jq -r --arg r "${OLDER_REF}" '.artifacts[] | .digests[$r] // empty' "${stdoutF}")"
 }
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
