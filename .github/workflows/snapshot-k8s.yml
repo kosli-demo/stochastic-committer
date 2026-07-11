@@ -1,4 +1,4 @@
-name: 🚫 Report a fake K8S snapshot
+name: 📦 Report a fake K8S snapshot
 
 # Reusable workflow that builds and PUTs a fake K8S environment snapshot by
 # reconciling the environment's current snapshot (readback) with this run's
