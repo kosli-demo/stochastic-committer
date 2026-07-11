@@ -3,7 +3,6 @@ name: 📦 Main cronjob stochastic committer
 on:
   schedule:
     - cron: '0 */6 * * *'  # Every 6 hours
-  workflow_dispatch: {}
 
 jobs:
   run:
