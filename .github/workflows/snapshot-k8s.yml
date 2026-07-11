@@ -101,7 +101,7 @@ jobs:
           # 1-3 min after the build (applied here, not in the pure scripts).
           python3 -c 'import json, random; recs = json.load(open("attested.json")); [r.update(creation_timestamp=r["creation_timestamp"] + random.randint(60, 180)) for r in recs]; json.dump(recs, open("attested.json", "w"))'
 
-          python3 bin/build_fresh_facts.py \
+          python3 bin/k8s_build_fresh_facts.py \
             --all-repos selected_repos.json --attested attested.json > fresh.json
 
       - name: Reconcile against readback and report, per host
@@ -142,7 +142,7 @@ jobs:
               exit 1
             fi
 
-            python3 bin/build_k8s_snapshot.py --current current.json --fresh fresh.json > report.json
+            python3 bin/k8s_build_snapshot.py --current current.json --fresh fresh.json > report.json
 
             curl --fail --silent --show-error --retry 5 --retry-max-time 120 \
               --request PUT \

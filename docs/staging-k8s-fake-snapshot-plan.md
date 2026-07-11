@@ -99,7 +99,7 @@ is driven through commit + CI differs by case:
 
 Each entry in `kosli-demo/base` `data/all-repos.json` carries an `env`
 assignment and a K8S runtime-identity block (applied to all 500 entries by
-`bin/add_k8s_identity_to_all_repos.py`, `namespace: beta`):
+`bin/k8s_add_identity_to_all_repos.py`, `namespace: beta`):
 
 ```json
 {
@@ -136,12 +136,12 @@ The payload assembly is split from the (network) Kosli fetches so both pieces
 stay unit-testable with fixtures (shunit2, black-box). The actual `GET`s live in
 the orchestration workflow.
 
-- **`bin/build_fresh_facts.py`** (harvester, pure join, planned): joins the
+- **`bin/k8s_build_fresh_facts.py`** (harvester, pure join, planned): joins the
   `all-repos.json` k8s block with a per-repo *attested* record
   (`{repo_name, fingerprint, git_commit, creation_timestamp}` fetched from the
   flow) into `--fresh` facts. Constructs `image_ref =
   ghcr.io/kosli-demo/<repo>:<git_commit[:7]>`, `digest = fingerprint`.
-- **`bin/build_k8s_snapshot.py`** (reconcile, built + tested): reconciles
+- **`bin/k8s_build_snapshot.py`** (reconcile, built + tested): reconciles
   `--current` (the latest snapshot, empty on bootstrap) with `--fresh` into the
   K8S report payload. Copies unchanged repos verbatim, replaces changed ones,
   skips exited artifacts (`annotation.now == 0`), and rejects malformed digests.
@@ -157,9 +157,9 @@ selected:
 - every repo is therefore `--fresh`, harvested from its just-attested flow;
 - `--current` is empty (first run: GET `-1` returns 400 -- the -1 index cannot
   resolve against 0 snapshots -- treated as empty),
-  which `build_k8s_snapshot.py` already handles.
+  which `k8s_build_snapshot.py` already handles.
 
-So `build_fresh_facts.py` (over all 200 selected flows) -> `build_k8s_snapshot.py`
+So `k8s_build_fresh_facts.py` (over all 200 selected flows) -> `k8s_build_snapshot.py`
 (empty `--current`) -> PUT to both hosts produces the full first snapshot, using
 the exact same scripts as steady state. The committer's snapshot job is rewired
 to this K8S path (replacing the server-type `demo-snapshot.yml`), reporting to
@@ -175,8 +175,8 @@ Each 6-hourly run does NOT rebuild the fleet:
 
 1. `GET /api/v2/snapshots/kosli-demo/staging-k8s/-1` -> current snapshot.
 2. For the ~selected repos (committed this run), fetch their flow's new attested
-   fingerprint/commit -> `build_fresh_facts.py` -> `--fresh`.
-3. `build_k8s_snapshot.py --current latest.json --fresh selected.json`: unchanged
+   fingerprint/commit -> `k8s_build_fresh_facts.py` -> `--fresh`.
+3. `k8s_build_snapshot.py --current latest.json --fresh selected.json`: unchanged
    repos are copied verbatim (byte-identical -> annotated `unchanged`), the
    selected repos are replaced (old digest exits, new digest starts), exited
    artifacts are dropped.
@@ -222,8 +222,8 @@ the readback. No per-repo runtime state is persisted between runs.
 1. **Turn OFF** the `stochastic-committer.yml` cronjob (stop the `schedule:` in
    `main-cronjob.yml`) so nothing runs mid-migration.
 2. **Land option A** in `secure-docker-build.yml` (attest the real image digest).
-3. **Rewire** the committer's snapshot job to the K8S path (`build_fresh_facts.py`
-   -> `build_k8s_snapshot.py` -> PUT `.../staging-k8s/report/K8S`, both hosts),
+3. **Rewire** the committer's snapshot job to the K8S path (`k8s_build_fresh_facts.py`
+   -> `k8s_build_snapshot.py` -> PUT `.../staging-k8s/report/K8S`, both hosts),
    replacing the server-type `demo-snapshot.yml`.
 4. **Run once** with `repo_count=200`, `repo_chance=100`: commits + CIs all 200
    (real-digest attestations land first), then the rewired snapshot job harvests
@@ -319,12 +319,12 @@ Steps (per host in `scope`, per env group):
    `fingerprint` + `git_commit` + base time (`created_at`/`git_commit_info`). Set
    the attested record's `creation_timestamp` = base + a random 60-180s deploy
    latency (pod "started" a realistic 1-3 min after the build). Done here, not in
-   `build_fresh_facts.py` (which stays pure), and only for fresh repos - unchanged
+   `k8s_build_fresh_facts.py` (which stays pure), and only for fresh repos - unchanged
    repos keep their stored timestamp via readback, so no drift.
-2. `build_fresh_facts.py` join with the `k8s` blocks -> fresh facts.
+2. `k8s_build_fresh_facts.py` join with the `k8s` blocks -> fresh facts.
 3. `GET /api/v2/snapshots/{org}/<env>/-1` -> current (400/404 -> empty; a fresh
    env with no snapshots returns 400).
-4. `build_k8s_snapshot.py --current current --fresh fresh` -> report.
+4. `k8s_build_snapshot.py --current current --fresh fresh` -> report.
 5. `PUT /api/v2/environments/{org}/<env>/report/K8S`.
 
 Open questions for this workflow are tracked in section 14 (creationTimestamp

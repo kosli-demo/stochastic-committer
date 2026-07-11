@@ -94,7 +94,7 @@ def _parse_args(argv):
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
         description="Reconcile the current K8S snapshot with fresh facts into the next report payload.",
-        epilog="Example:\n  bin/build_k8s_snapshot.py --current latest.json --fresh fresh-facts.json > report.json",
+        epilog="Example:\n  bin/k8s_build_snapshot.py --current latest.json --fresh fresh-facts.json > report.json",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the --fresh facts for build_k8s_snapshot.py.
+"""Build the --fresh facts for k8s_build_snapshot.py.
 
 Joins each attested flow record (a repo's latest flow artifact: repo_name,
 fingerprint, git_commit, creation_timestamp) with that repo's k8s identity block
@@ -28,7 +28,7 @@ def fresh_fact(attested, k8s):
     }
 
 
-def build_fresh_facts(attested_records, k8s_by_repo):
+def k8s_build_fresh_facts(attested_records, k8s_by_repo):
     """Return a fresh fact for each attested record, joined by repo_name.
 
     Raises ValueError if an attested repo has no k8s block in all-repos.json.
@@ -46,7 +46,7 @@ def _parse_args(argv):
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
         description="Join flow attestations with all-repos.json k8s blocks into --fresh facts.",
-        epilog="Example:\n  bin/build_fresh_facts.py --all-repos all-repos.json --attested attested.json > fresh.json",
+        epilog="Example:\n  bin/k8s_build_fresh_facts.py --all-repos all-repos.json --attested attested.json > fresh.json",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
@@ -77,7 +77,7 @@ def main(argv):
     k8s_by_repo = {entry["repo_name"]: entry["k8s"] for entry in all_repos if "k8s" in entry}
     attested_records = _load(args.attested)
     try:
-        facts = build_fresh_facts(attested_records, k8s_by_repo)
+        facts = k8s_build_fresh_facts(attested_records, k8s_by_repo)
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         sys.exit(1)

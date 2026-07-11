@@ -61,7 +61,7 @@ jobs:
             owners: [{apiVersion: "apps/v1", kind: "ReplicaSet", name: "rogue-trader-6f7a8b9c0", uid: "3d0e2f4a-5b6c-7d8e-9f0a-1b2c3d4e5f60", controller: true, blockOwnerDeletion: true}]
           }]' > rogue.json
 
-          python3 bin/build_k8s_snapshot.py --current current.json --fresh rogue.json > report.json
+          python3 bin/k8s_build_snapshot.py --current current.json --fresh rogue.json > report.json
 
           curl --fail --silent --show-error --retry 5 --retry-max-time 120 \
             --request PUT \

@@ -1,7 +1,7 @@
 # DEMO part 2: reset staging-k8s back to compliant.
 #
 # Reads the current staging-k8s snapshot and re-reports it with the rogue-trader
-# artifact removed (build_k8s_snapshot.py --drop), so the environment goes back
+# artifact removed (k8s_build_snapshot.py --drop), so the environment goes back
 # to green. Cheap and targeted: one GET + one PUT, no commit/CI fan-out.
 #
 # Targets app.kosli.com (same env as demo-deploy-rogue.yml).
@@ -45,7 +45,7 @@ jobs:
             echo "GET snapshot failed: ${code}" ; cat current.json ; exit 1
           fi
 
-          python3 bin/build_k8s_snapshot.py --current current.json --drop rogue-trader > report.json
+          python3 bin/k8s_build_snapshot.py --current current.json --drop rogue-trader > report.json
 
           curl --fail --silent --show-error --retry 5 --retry-max-time 120 \
             --request PUT \

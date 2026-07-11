@@ -14,7 +14,7 @@ readonly SELECTOR="${my_dir}/../bin/select_repos.py"
 
 test_new_repo_is_force_selected_even_at_zero_chance()
 {
-  select_repos "${my_dir}/fixtures/select-repos-mixed.json" 2 0
+  select_repos "${my_dir}/fixtures/shared/select-repos-mixed.json" 2 0
   assert_status_0
   assertEquals "existing repo not selected" "false" \
     "$(jq -c '.[] | select(.repo_name == "golden-ledger") | .selected' "${stdoutF}")"

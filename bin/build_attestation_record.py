@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Build attestation records for build_fresh_facts.py from flow artifacts.
+"""Build attestation records for k8s_build_fresh_facts.py from flow artifacts.
 
 For each selected repo, picks the latest artifact (max git_commit_info.timestamp)
 from that repo's flow-artifacts response and emits
 {repo_name, fingerprint, git_commit, creation_timestamp}. creation_timestamp is
 the commit time (the base); the snapshot workflow adds a random deploy latency
-on top before handing the records to build_fresh_facts.py.
+on top before handing the records to k8s_build_fresh_facts.py.
 """
 
 import argparse

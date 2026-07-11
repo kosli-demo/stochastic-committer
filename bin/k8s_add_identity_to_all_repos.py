@@ -71,7 +71,7 @@ def _parse_args(argv):
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
         description="Add staging-k8s env + k8s identity to all-repos.json entries.",
-        epilog="Example:\n  bin/add_k8s_identity_to_all_repos.py ../base/data/all-repos.json",
+        epilog="Example:\n  bin/k8s_add_identity_to_all_repos.py ../base/data/all-repos.json",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("all_repos_json", help="Path to the all-repos.json file")

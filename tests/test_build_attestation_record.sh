@@ -19,8 +19,8 @@ readonly LATEST_COMMIT="52ec808f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d"
 
 test_picks_latest_artifact_and_extracts_the_record()
 {
-  build --selected "${my_dir}/fixtures/attestation-selected.json" \
-        --artifacts "${my_dir}/fixtures/attestation-artifacts.json"
+  build --selected "${my_dir}/fixtures/shared/attestation-selected.json" \
+        --artifacts "${my_dir}/fixtures/shared/attestation-artifacts.json"
   assert_status_0
   assertEquals "record count"       "1" "$(jq 'length' "${stdoutF}")"
   assertEquals "repo_name"          "golden-ledger" "$(jq -r '.[0].repo_name' "${stdoutF}")"
@@ -35,8 +35,8 @@ test_picks_latest_artifact_and_extracts_the_record()
 
 test_self_filters_out_entries_without_a_k8s_block()
 {
-  build --selected "${my_dir}/fixtures/attestation-selected-mixed.json" \
-        --artifacts "${my_dir}/fixtures/attestation-artifacts-mixed.json"
+  build --selected "${my_dir}/fixtures/shared/attestation-selected-mixed.json" \
+        --artifacts "${my_dir}/fixtures/shared/attestation-artifacts-mixed.json"
   assert_status_0
   assertEquals "record count"    "1" "$(jq 'length' "${stdoutF}")"
   assertEquals "only the k8s repo" "golden-ledger" "$(jq -r '.[0].repo_name' "${stdoutF}")"
