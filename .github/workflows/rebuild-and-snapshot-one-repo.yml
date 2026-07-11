@@ -1,0 +1,127 @@
+name: Rebuild and re-snapshot one repo
+
+# Fixes a single repo whose secure-docker-build failed (typically a transient
+# network flake) WITHOUT a manual per-repo commit, so each repo stays a clone of
+# base. It commits base's current tree over the repo (new git sha -> new image
+# tag, which sidesteps the registry's immutable tags), triggers the repo's CI to
+# rebuild and re-attest the real image digest to Kosli, waits for that CI, then
+# reports a fresh staging-k8s snapshot carrying the repo's new digest so it goes
+# compliant.
+#
+# This is stochastic-committer.yml reduced to a single, explicitly-named repo:
+# it reuses the same commit-to-repo-and-trigger-ci.yml and snapshot-k8s.yml.
+# Reports to prod (app.kosli.com), the host the cron reports staging-k8s to.
+
+on:
+  workflow_dispatch:
+    inputs:
+      repo_name:
+        description: 'The single repo to rebuild and re-snapshot (eg exotic-derivative)'
+        type: string
+        required: true
+
+jobs:
+  # Turn the repo name into the one-element selected_repos list the downstream
+  # reusable workflows expect. snapshot-k8s.yml reads each entry's k8s block and
+  # env field, so it must be handed the whole all-repos.json entry, not a name.
+  select-one:
+    runs-on: ubuntu-latest
+    outputs:
+      selected_repos: ${{ steps.pick.outputs.selected_repos }}
+      exists: ${{ steps.pick.outputs.exists }}
+    env:
+      REPO_NAME: ${{ inputs.repo_name }}
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+
+      - name: Pick the repo's entry from base/data/all-repos.json
+        id: pick
+        run: |
+          set -Eeuo pipefail
+          URL=https://raw.githubusercontent.com/kosli-demo/base/refs/heads/main/data/all-repos.json
+          curl --fail --retry 5 --retry-max-time 120 --silent --show-error --output all_repos.json "${URL}"
+
+          ENTRY="$(jq --compact-output --arg name "${REPO_NAME}" '.[] | select(.repo_name == $name)' all_repos.json)"
+          if [ -z "${ENTRY}" ]; then
+            echo "repo '${REPO_NAME}' not found in all-repos.json"
+            exit 1
+          fi
+
+          SELECTED="$(jq --compact-output --null-input --argjson e "${ENTRY}" '[ $e ]')"
+          echo "selected_repos=${SELECTED}" >> "${GITHUB_OUTPUT}"
+          echo "exists=$(jq --raw-output '.exists' <<< "${ENTRY}")" >> "${GITHUB_OUTPUT}"
+
+  # Lay base's current tree over the repo + bump datetime.txt (new sha -> new
+  # tag), then dispatch the repo's main.yml CI (build + attest to prod).
+  commit-and-ci:
+    needs: [select-one]
+    uses: ./.github/workflows/commit-to-repo-and-trigger-ci.yml
+    with:
+      scope: prod
+      repo_name: ${{ inputs.repo_name }}
+      exists: ${{ needs.select-one.outputs.exists == 'true' }}
+    secrets:
+      CLONE_PUSH_REPOS: ${{ secrets.CLONE_PUSH_REPOS }}
+      KOSLI_API_TOKEN_STAGING: ${{ secrets.KOSLI_API_TOKEN_STAGING }}
+      KOSLI_API_TOKEN_PROD: ${{ secrets.KOSLI_API_TOKEN_PROD }}
+
+  await-ci:
+    needs: [commit-and-ci]
+    runs-on: ubuntu-latest
+    env:
+      REPO_NAME: ${{ inputs.repo_name }}
+      GH_TOKEN: ${{ secrets.CLONE_PUSH_REPOS }}
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+
+      - name: Wait for the repo's rebuild CI to finish
+        # commit-to-repo-and-trigger-ci dispatches the CI and returns immediately.
+        # The snapshot must not run until the repo's flow holds the new
+        # attestation, or snapshot-k8s would find no artifact and skip the repo.
+        # main.yml does not push back to main, so main's HEAD is the fix commit
+        # whose workflow_dispatch run we wait on. Fails toward not-done.
+        run: |
+          set -Eeuo pipefail
+          HEAD_SHA="$(gh api "repos/kosli-demo/${REPO_NAME}/commits/main" --jq '.sha')"
+          echo "Waiting for main.yml workflow_dispatch run at ${HEAD_SHA:0:7}"
+          DEADLINE=$(( $(date +%s) + 1800 ))   # 30 minute ceiling
+          while true; do
+            RUN="$(gh run list --repo "kosli-demo/${REPO_NAME}" --workflow main.yml \
+              --event workflow_dispatch --branch main --limit 20 \
+              --json headSha,status,conclusion \
+              --jq "[.[] | select(.headSha == \"${HEAD_SHA}\")] | .[0]")"
+            STATUS="$(jq --raw-output '.status // "queued"' <<< "${RUN:-null}")"
+            CONCLUSION="$(jq --raw-output '.conclusion // ""' <<< "${RUN:-null}")"
+            if [ "${STATUS}" = "completed" ]; then
+              if [ "${CONCLUSION}" = "success" ]; then
+                echo "CI succeeded for ${REPO_NAME} at ${HEAD_SHA:0:7}"
+                break
+              fi
+              echo "CI for ${REPO_NAME} concluded '${CONCLUSION}' (not success)"
+              exit 1
+            fi
+            echo "CI status='${STATUS}'; waiting..."
+            if [ "$(date +%s)" -ge "${DEADLINE}" ]; then
+              echo "Timed out after 30 minutes waiting for ${REPO_NAME} CI"
+              exit 1
+            fi
+            sleep 20
+          done
+
+  # Report a fresh staging-k8s snapshot carrying the repo's real new digest
+  # (fetched from its Kosli flow), reconciled against the current snapshot.
+  snapshot:
+    needs: [select-one, await-ci]
+    uses: ./.github/workflows/snapshot-k8s.yml
+    with:
+      scope: prod
+      selected_repos: ${{ needs.select-one.outputs.selected_repos }}
+    secrets:
+      KOSLI_API_TOKEN_STAGING: ${{ secrets.KOSLI_API_TOKEN_STAGING }}
+      KOSLI_API_TOKEN_PROD: ${{ secrets.KOSLI_API_TOKEN_PROD }}
