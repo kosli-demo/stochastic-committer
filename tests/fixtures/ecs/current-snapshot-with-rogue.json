@@ -1,0 +1,32 @@
+{
+  "index": 15,
+  "type": "ECS",
+  "artifacts": [
+    {
+      "name": "ghcr.io/kosli-demo/market-feed:d4e5f6a@sha256:b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5",
+      "fingerprint": "b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5b2c3d4e5",
+      "git_commit": "d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3",
+      "creationTimestamp": [1783550000],
+      "annotation": {"type": "unchanged", "was": 1, "now": 1},
+      "ecs_context": {
+        "task_arn": "arn:aws:ecs:eu-central-1:111122223333:task/beta/1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d",
+        "cluster_name": "beta",
+        "service_name": "market-feed"
+      },
+      "pods": null
+    },
+    {
+      "name": "ghcr.io/kosli-demo/rogue-task:badf00d@sha256:0badf00d0badf00d0badf00d0badf00d0badf00d0badf00d0badf00d0badf00d0",
+      "fingerprint": "0badf00d0badf00d0badf00d0badf00d0badf00d0badf00d0badf00d0badf00d0",
+      "git_commit": "badf00d0badf00d0badf00d0badf00d0badf00d00",
+      "creationTimestamp": [1783560000],
+      "annotation": {"type": "unchanged", "was": 1, "now": 1},
+      "ecs_context": {
+        "task_arn": "arn:aws:ecs:eu-central-1:111122223333:task/beta/9f8e7d6c5b4a39281706f5e4d3c2b1a0",
+        "cluster_name": "beta",
+        "service_name": "rogue-task"
+      },
+      "pods": null
+    }
+  ]
+}

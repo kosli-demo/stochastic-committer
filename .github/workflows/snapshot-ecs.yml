@@ -1,6 +1,6 @@
-name: 📦 Report a fake K8S snapshot
+name: 📦 Report a fake ECS snapshot
 
-# Reusable workflow that builds and PUTs a fake K8S environment snapshot by
+# Reusable workflow that builds and PUTs a fake ECS environment snapshot by
 # reconciling the environment's current snapshot (readback) with this run's
 # freshly-attested repos. It calls the pure, unit-tested bin/ scripts and keeps
 # only the network (GET/PUT) and the random deploy-latency here.
@@ -17,7 +17,7 @@ on:
         type: string
         required: true
       selected_repos:
-        description: 'JSON list of repos committed this run (from select-n-repos), each with its k8s block and env'
+        description: 'JSON list of repos committed this run (from select-n-repos), each with its ecs block and env'
         type: string
         required: true
     secrets:
@@ -34,7 +34,7 @@ env:
   KOSLI_API_TOKEN_PROD: ${{ secrets.KOSLI_API_TOKEN_PROD }}
 
 jobs:
-  snapshot-k8s:
+  snapshot-ecs:
     runs-on: ubuntu-latest
     steps:
       - name: Harden Runner
@@ -49,22 +49,22 @@ jobs:
           set -Eeuo pipefail
           printf '%s' "${SELECTED_REPOS}" > selected_repos.json
 
-          # This workflow reports ONE k8s env, read from the data. Fail rather
-          # than silently mis-report if the selected k8s repos span >1 env.
+          # This workflow reports ONE ecs env, read from the data. Fail rather
+          # than silently mis-report if the selected ecs repos span >1 env.
           mapfile -t ENVS < <(jq -r '[.[] | .env] | unique | .[]' selected_repos.json)
           if [ "${#ENVS[@]}" -eq 0 ]; then
-            echo "No k8s repos selected; nothing to snapshot."
+            echo "No ecs repos selected; nothing to snapshot."
             printf '' > env.txt
             exit 0
           fi
           if [ "${#ENVS[@]}" -gt 1 ]; then
-            echo "snapshot-k8s handles a single k8s env; found: ${ENVS[*]}"
+            echo "snapshot-ecs handles a single ecs env; found: ${ENVS[*]}"
             exit 1
           fi
           printf '%s' "${ENVS[0]}" > env.txt
 
           # Attestation records are host-independent (the real image digest is the
-          # same on every host), so fetch each k8s repo's flow once, from the first
+          # same on every host), so fetch each ecs repo's flow once, from the first
           # host in scope.
           case "${SCOPE}" in
             prod|both) FETCH_HOST="https://app.kosli.com" ; FETCH_TOKEN="${KOSLI_API_TOKEN_PROD}" ;;
@@ -97,11 +97,11 @@ jobs:
           python3 bin/build_attestation_record.py \
             --selected selected_with_artifacts.json --artifacts artifacts.json > attested.json
 
-          # Add a random 60-180s deploy latency so the pod "started" a realistic
+          # Add a random 60-180s deploy latency so the task "started" a realistic
           # 1-3 min after the build (applied here, not in the pure scripts).
           python3 -c 'import json, random; recs = json.load(open("attested.json")); [r.update(creation_timestamp=r["creation_timestamp"] + random.randint(60, 180)) for r in recs]; json.dump(recs, open("attested.json", "w"))'
 
-          python3 bin/k8s_build_fresh_facts.py \
+          python3 bin/ecs_build_fresh_facts.py \
             --all-repos selected_repos.json --attested attested.json > fresh.json
 
       - name: Reconcile against readback and report, per host
@@ -142,13 +142,13 @@ jobs:
               exit 1
             fi
 
-            python3 bin/k8s_build_snapshot.py --current current.json --fresh fresh.json > report.json
+            python3 bin/ecs_build_snapshot.py --current current.json --fresh fresh.json > report.json
 
             curl --fail --silent --show-error --retry 5 --retry-max-time 120 \
               --request PUT \
               --header "Authorization: Bearer ${token}" \
               --header "Content-Type: application/json" \
               --data @report.json \
-              "${host}/api/v2/environments/${KOSLI_ORG}/${ENV}/report/K8S"
+              "${host}/api/v2/environments/${KOSLI_ORG}/${ENV}/report/ECS"
             echo "reported ${ENV} to ${host}"
           done

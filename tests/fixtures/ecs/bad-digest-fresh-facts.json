@@ -1,0 +1,11 @@
+[
+  {
+    "repo_name": "risk-service",
+    "image_ref": "ghcr.io/kosli-demo/risk-service:aabbccd",
+    "digest": "sha256:a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4",
+    "creation_timestamp": 1783500000,
+    "task_arn": "arn:aws:ecs:eu-central-1:111122223333:task/beta/2f698d3b9c3c4a16912df9c23d6f6508",
+    "cluster_name": "beta",
+    "service_name": "risk-service"
+  }
+]

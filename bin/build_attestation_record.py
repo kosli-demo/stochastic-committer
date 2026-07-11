@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Build attestation records for k8s_build_fresh_facts.py from flow artifacts.
+"""Build attestation records for the fresh-facts builders from flow artifacts.
 
 For each selected repo, picks the latest artifact (max git_commit_info.timestamp)
 from that repo's flow-artifacts response and emits
 {repo_name, fingerprint, git_commit, creation_timestamp}. creation_timestamp is
 the commit time (the base); the snapshot workflow adds a random deploy latency
-on top before handing the records to k8s_build_fresh_facts.py.
+on top before handing the records to the env's fresh-facts builder.
 """
 
 import argparse
@@ -30,15 +30,14 @@ def attestation_record(repo_name, artifacts):
 
 
 def build_attestation_records(selected, artifacts_by_repo):
-    """Build an attestation record for each selected repo that has a k8s block.
+    """Build an attestation record for each selected repo.
 
-    Entries without a k8s block (e.g. an ecs-targeted repo) are skipped, so this
-    K8S snapshot workflow records only its own type.
+    Env-agnostic: the caller passes an env-pure selected list, so every entry
+    gets a record regardless of its deploy target (k8s or ecs).
     """
     return [
         attestation_record(entry["repo_name"], artifacts_by_repo[entry["repo_name"]])
         for entry in selected
-        if "k8s" in entry
     ]
 
 

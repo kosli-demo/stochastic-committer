@@ -1,0 +1,89 @@
+#!/usr/bin/env python3
+"""Build the --fresh facts for ecs_build_snapshot.py.
+
+Joins each attested flow record (a repo's latest flow artifact: repo_name,
+fingerprint, git_commit, creation_timestamp) with that repo's ecs identity block
+from all-repos.json (taskArn, cluster_name, service_name) into one fresh fact.
+"""
+
+import argparse
+import json
+import sys
+
+_REGISTRY = "ghcr.io/kosli-demo"
+
+
+def fresh_fact(attested, ecs):
+    """Join one attested flow record with its all-repos.json ecs block."""
+    repo_name = attested["repo_name"]
+    short_sha = attested["git_commit"][:7]
+    return {
+        "repo_name": repo_name,
+        "image_ref": f"{_REGISTRY}/{repo_name}:{short_sha}",
+        "digest": attested["fingerprint"],
+        "creation_timestamp": attested["creation_timestamp"],
+        "task_arn": ecs["taskArn"],
+        "cluster_name": ecs["cluster_name"],
+        "service_name": ecs["service_name"],
+    }
+
+
+def ecs_build_fresh_facts(attested_records, ecs_by_repo):
+    """Return a fresh fact for each attested record, joined by repo_name.
+
+    Raises ValueError if an attested repo has no ecs block in all-repos.json.
+    """
+    facts = []
+    for attested in attested_records:
+        repo_name = attested["repo_name"]
+        if repo_name not in ecs_by_repo:
+            raise ValueError(f"repo '{repo_name}' has no ecs block in all-repos.json")
+        facts.append(fresh_fact(attested, ecs_by_repo[repo_name]))
+    return facts
+
+
+def _parse_args(argv):
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(
+        description="Join flow attestations with all-repos.json ecs blocks into --fresh facts.",
+        epilog="Example:\n  bin/ecs_build_fresh_facts.py --all-repos all-repos.json --attested attested.json > fresh.json",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "--all-repos",
+        metavar="FILE",
+        required=True,
+        help="all-repos.json with per-repo ecs blocks",
+    )
+    parser.add_argument(
+        "--attested",
+        metavar="FILE",
+        required=True,
+        help="JSON list of flow records {repo_name, fingerprint, git_commit, creation_timestamp}",
+    )
+    return parser.parse_args(argv)
+
+
+def _load(path):
+    """Load and return JSON parsed from the given file path."""
+    with open(path) as json_file:
+        return json.load(json_file)
+
+
+def main(argv):
+    """Join attested records with all-repos ecs blocks and print fresh facts."""
+    args = _parse_args(argv)
+    all_repos = _load(args.all_repos)
+    ecs_by_repo = {entry["repo_name"]: entry["ecs"] for entry in all_repos if "ecs" in entry}
+    attested_records = _load(args.attested)
+    try:
+        facts = ecs_build_fresh_facts(attested_records, ecs_by_repo)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        sys.exit(1)
+    json.dump(facts, sys.stdout, indent=2)
+    sys.stdout.write("\n")
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

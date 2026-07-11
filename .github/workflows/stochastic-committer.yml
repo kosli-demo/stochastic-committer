@@ -57,6 +57,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       selected_repos: ${{ steps.set-repos.outputs.selected_repos }}
+      selected_k8s_repos: ${{ steps.set-repos.outputs.selected_k8s_repos }}
+      selected_ecs_repos: ${{ steps.set-repos.outputs.selected_ecs_repos }}
       non_existent_repos: ${{ steps.set-repos.outputs.non_existent_repos }}
     steps:
       - name: Harden Runner
@@ -76,6 +78,12 @@ jobs:
           ./bin/select_repos.py all_repos.json ${REPO_COUNT} ${REPO_CHANCE} > n_repos.json
           SELECTED_REPOS="$(jq --compact-output '[.[] | select(.selected == true)]' n_repos.json)"
 
+          # Partition the selected repos by deploy target so each snapshot workflow
+          # receives only its own env's repos: snapshot-k8s the k8s ones, snapshot-ecs
+          # the ecs ones. The commit + CI fan-out below stays over the full selected set.
+          SELECTED_K8S_REPOS="$(jq --compact-output '[.[] | select(.selected == true and .k8s)]' n_repos.json)"
+          SELECTED_ECS_REPOS="$(jq --compact-output '[.[] | select(.selected == true and .ecs)]' n_repos.json)"
+
           # non-existent repos (exists == false) are the ones create-new-repos must
           # create this run. select_repos.py force-selects them, so they are also in
           # SELECTED_REPOS and get committed + CI'd (attested) once created -- which is
@@ -83,6 +91,8 @@ jobs:
           NON_EXISTENT_REPOS="$(jq --compact-output '[.[] | select(.exists == false)]' n_repos.json)"
           
           echo "selected_repos=${SELECTED_REPOS}" >> ${GITHUB_OUTPUT}
+          echo "selected_k8s_repos=${SELECTED_K8S_REPOS}" >> ${GITHUB_OUTPUT}
+          echo "selected_ecs_repos=${SELECTED_ECS_REPOS}" >> ${GITHUB_OUTPUT}
           echo "non_existent_repos=${NON_EXISTENT_REPOS}" >> ${GITHUB_OUTPUT}
 
 
@@ -289,7 +299,7 @@ jobs:
           fi
           echo "All ${#REPOS[@]} selected repos' CI runs succeeded"
 
-  simulate-deployments-from-selected-repos:
+  simulate-k8s-deployments-from-selected-repos:
     needs: [select-n-repos, simulate-commits-to-selected-repos, await-selected-repos-ci]
     # `needs` keeps the ordering edge: this job waits for every commit/CI leg to
     # finish before snapshotting, so it never reports a repo before the CI run that
@@ -304,12 +314,29 @@ jobs:
     #   - gating on select-n-repos success avoids snapshotting nothing: if repo
     #     selection itself failed there is no fleet to report.
     #
-    # The K8S snapshot logic lives in the reusable snapshot-k8s.yml.
+    # The fleet spans two deploy targets, so the selected repos are partitioned by
+    # env (in select-n-repos) and each snapshot workflow is handed only its own:
+    # the k8s repos here, the ecs repos in the sibling job below. The K8S snapshot
+    # logic lives in the reusable snapshot-k8s.yml.
     if: ${{ always() && needs.select-n-repos.result == 'success' }}
     uses: ./.github/workflows/snapshot-k8s.yml
     with:
       scope: prod
-      selected_repos: ${{ needs.select-n-repos.outputs.selected_repos }}
+      selected_repos: ${{ needs.select-n-repos.outputs.selected_k8s_repos }}
+    secrets:
+      KOSLI_API_TOKEN_STAGING: ${{ secrets.KOSLI_API_TOKEN_STAGING }}
+      KOSLI_API_TOKEN_PROD: ${{ secrets.KOSLI_API_TOKEN_PROD }}
+
+  simulate-ecs-deployments-from-selected-repos:
+    needs: [select-n-repos, simulate-commits-to-selected-repos, await-selected-repos-ci]
+    # ECS sibling of simulate-k8s-deployments-from-selected-repos: same gating and
+    # rationale, reporting the ecs half of the selected fleet to the ECS env via the
+    # reusable snapshot-ecs.yml. Handed only the ecs repos (empty -> nothing to snapshot).
+    if: ${{ always() && needs.select-n-repos.result == 'success' }}
+    uses: ./.github/workflows/snapshot-ecs.yml
+    with:
+      scope: prod
+      selected_repos: ${{ needs.select-n-repos.outputs.selected_ecs_repos }}
     secrets:
       KOSLI_API_TOKEN_STAGING: ${{ secrets.KOSLI_API_TOKEN_STAGING }}
       KOSLI_API_TOKEN_PROD: ${{ secrets.KOSLI_API_TOKEN_PROD }}

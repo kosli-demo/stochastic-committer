@@ -3,7 +3,8 @@
 # Tests for bin/build_attestation_record.py: from each selected repo's flow
 # artifacts (GET /artifacts/{org}/<repo>-ci), pick the latest artifact (max
 # git_commit_info.timestamp) and emit {repo_name, fingerprint, git_commit,
-# creation_timestamp}; self-filter to entries that have a k8s block. The base
+# creation_timestamp}. Env-agnostic: the caller passes an env-pure selected list,
+# so this step builds a record for every selected repo without filtering. The base
 # creation_timestamp is the commit time; the workflow adds deploy latency later.
 # Black-box via jq.
 
@@ -30,17 +31,19 @@ test_picks_latest_artifact_and_extracts_the_record()
 }
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-# Self-filter (option b): a selected entry with no k8s block (e.g. an ecs one)
-# is skipped - snapshot-k8s only records its own type.
+# Env-agnostic: a record is built for every selected repo regardless of its
+# deploy target (k8s or ecs). The caller hands this step an env-pure list, so it
+# never filters by block.
 
-test_self_filters_out_entries_without_a_k8s_block()
+test_builds_a_record_for_every_selected_repo_regardless_of_env()
 {
   build --selected "${my_dir}/fixtures/shared/attestation-selected-mixed.json" \
         --artifacts "${my_dir}/fixtures/shared/attestation-artifacts-mixed.json"
   assert_status_0
-  assertEquals "record count"    "1" "$(jq 'length' "${stdoutF}")"
-  assertEquals "only the k8s repo" "golden-ledger" "$(jq -r '.[0].repo_name' "${stdoutF}")"
-  assertEquals "ecs repo skipped"  "" \
+  assertEquals "record count"      "2" "$(jq 'length' "${stdoutF}")"
+  assertEquals "k8s repo included" "golden-ledger" \
+    "$(jq -r '.[] | select(.repo_name == "golden-ledger") | .repo_name' "${stdoutF}")"
+  assertEquals "ecs repo included" "risk-service" \
     "$(jq -r '.[] | select(.repo_name == "risk-service") | .repo_name' "${stdoutF}")"
 }
 
