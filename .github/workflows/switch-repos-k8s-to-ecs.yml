@@ -1,0 +1,151 @@
+name: ▶️ Switch repos from k8s to ecs
+
+# One-off migration: move a hard-coded set of repos from the fake k8s environment
+# to the fake ecs environment. A clean switch is three ordered state changes:
+#
+#   1. flip-base-data : rewrite each repo's block in base/data/all-repos.json from
+#      k8s to ecs and commit it, so every FUTURE stochastic run routes the repo
+#      down the ecs path.
+#   2. evict-from-k8s : drop each repo from the staging-k8s environment once. The
+#      k8s snapshot copies unchanged repos verbatim from the readback, so without
+#      an explicit drop the repo's stale k8s artifact would linger forever.
+#   3. seed-into-ecs  : report each repo to staging-ecs now (via snapshot-ecs.yml)
+#      instead of waiting for it to win the stochastic draw.
+#
+# Order matters: flip (1) before evict (2), else the next run re-adds the repo to
+# k8s; seed (3) needs the ecs block the flip creates. Steps 2 and 3 touch
+# different environments and run in parallel. The staging-ecs environment must
+# already exist (kosli create environment staging-ecs --type ECS).
+
+on:
+  workflow_dispatch:
+
+env:
+  KOSLI_ORG: ${{ vars.KOSLI_ORG }}
+  REPOS_TO_SWITCH: "listed-derivative"
+  SCOPE: prod
+  KOSLI_API_TOKEN_STAGING: ${{ secrets.KOSLI_API_TOKEN_STAGING }}
+  KOSLI_API_TOKEN_PROD: ${{ secrets.KOSLI_API_TOKEN_PROD }}
+
+jobs:
+  flip-base-data:
+    runs-on: ubuntu-latest
+    outputs:
+      switched_repos: ${{ steps.flip.outputs.switched_repos }}
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+
+      - name: Configure git
+        run: |
+          git config --global user.name "${{ github.actor }}"
+          git config --global user.email "${{ github.event.sender.login }}@users.noreply.github.com"
+
+      - uses: actions/checkout@v6
+
+      - uses: actions/checkout@v6
+        with:
+          repository: kosli-demo/base
+          token: ${{ secrets.CLONE_PUSH_REPOS }}
+          path: base
+
+      - name: Switch the named repos to ecs in base all-repos.json
+        id: flip
+        run: |
+          set -Eeuo pipefail
+          python3 bin/switch_repos_to_ecs.py base/data/all-repos.json ${REPOS_TO_SWITCH}
+
+          # Hand the switched entries (now carrying ecs blocks) to the ecs seed job.
+          SWITCHED="$(jq --compact-output --arg repos "${REPOS_TO_SWITCH}" \
+            '($repos / " ") as $r | [ .[] | select(.repo_name as $n | $r | index($n)) ]' \
+            base/data/all-repos.json)"
+          echo "switched_repos=${SWITCHED}" >> ${GITHUB_OUTPUT}
+
+      - name: Commit and push base
+        run: |
+          cd base
+          git add data/all-repos.json
+          if git diff --cached --quiet; then
+            echo "No change (repos already ecs); nothing to commit."
+          else
+            git commit --message "Switch ${REPOS_TO_SWITCH} from k8s to ecs"
+            git push
+          fi
+
+
+  evict-from-k8s:
+    needs: [flip-base-data]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@v6
+
+      - name: Drop the switched repos from staging-k8s
+        run: |
+          set -Eeuo pipefail
+          ENV="staging-k8s"
+
+          # One --drop per repo (k8s_build_snapshot --drop is repeatable).
+          DROPS=""
+          for repo in ${REPOS_TO_SWITCH}; do
+            DROPS="${DROPS} --drop ${repo}"
+          done
+
+          case "${SCOPE}" in
+            staging) HOSTS=("https://staging.app.kosli.com") ; TOKENS=("${KOSLI_API_TOKEN_STAGING}") ;;
+            prod)    HOSTS=("https://app.kosli.com") ; TOKENS=("${KOSLI_API_TOKEN_PROD}") ;;
+            both)    HOSTS=("https://app.kosli.com" "https://staging.app.kosli.com")
+                     TOKENS=("${KOSLI_API_TOKEN_PROD}" "${KOSLI_API_TOKEN_STAGING}") ;;
+            *) echo "unknown scope: ${SCOPE}" ; exit 1 ;;
+          esac
+
+          for i in "${!HOSTS[@]}"; do
+            host="${HOSTS[$i]}"
+            token="${TOKENS[$i]}"
+
+            # Read the current snapshot; 400/404 (no snapshots / no env yet) -> empty.
+            code="$(curl --silent --show-error --retry 5 --retry-max-time 120 \
+              --output current.json --write-out '%{http_code}' \
+              --header "Authorization: Bearer ${token}" \
+              "${host}/api/v2/snapshots/${KOSLI_ORG}/${ENV}/-1")"
+            if [ "${code}" = "200" ]; then
+              : # use current.json as read back
+            elif [ "${code}" = "400" ] || [ "${code}" = "404" ]; then
+              echo '{"artifacts":[]}' > current.json
+            else
+              echo "GET snapshot failed on ${host}: ${code}"
+              cat current.json
+              exit 1
+            fi
+
+            python3 bin/k8s_build_snapshot.py --current current.json ${DROPS} > report.json
+
+            curl --fail --silent --show-error --retry 5 --retry-max-time 120 \
+              --request PUT \
+              --header "Authorization: Bearer ${token}" \
+              --header "Content-Type: application/json" \
+              --data @report.json \
+              "${host}/api/v2/environments/${KOSLI_ORG}/${ENV}/report/K8S"
+            echo "dropped [${REPOS_TO_SWITCH}] from ${ENV} on ${host}"
+          done
+
+
+  seed-into-ecs:
+    needs: [flip-base-data]
+    # Report the switched repos to staging-ecs now, reusing the standard ecs
+    # snapshot pipeline. snapshot-ecs derives the env from each entry's ecs block
+    # and fetches each repo's latest flow attestation (present from its k8s life),
+    # so no fresh commit is needed.
+    uses: ./.github/workflows/snapshot-ecs.yml
+    with:
+      scope: prod
+      selected_repos: ${{ needs.flip-base-data.outputs.switched_repos }}
+    secrets:
+      KOSLI_API_TOKEN_STAGING: ${{ secrets.KOSLI_API_TOKEN_STAGING }}
+      KOSLI_API_TOKEN_PROD: ${{ secrets.KOSLI_API_TOKEN_PROD }}
