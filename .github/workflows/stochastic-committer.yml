@@ -9,7 +9,7 @@
 # over all N repos regardless of selection would waste jobs and, with a large
 # enough N, could hit the limit.
 
-name: Simulate commits on many repos
+name: ▶️ Simulate commits on many repos
 
 on:
   workflow_call:

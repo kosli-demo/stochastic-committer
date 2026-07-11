@@ -6,7 +6,7 @@
 #
 # Targets app.kosli.com (same env as demo-deploy-rogue.yml).
 
-name: Demo - reset env to compliant
+name: ▶️ Demo - reset env to compliant
 
 on:
   workflow_dispatch: {}

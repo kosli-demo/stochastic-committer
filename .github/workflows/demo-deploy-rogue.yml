@@ -10,7 +10,7 @@
 #
 # Targets app.kosli.com (the host the cron reports staging-k8s to).
 
-name: Demo - deploy no-provenance artifact
+name: ▶️ Demo - deploy no-provenance artifact
 
 on:
   workflow_dispatch: {}

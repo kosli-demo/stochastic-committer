@@ -1,4 +1,4 @@
-name: Create new repo
+name: 🚫 Create new repo
 
 on:
   workflow_call:

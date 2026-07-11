@@ -1,4 +1,4 @@
-name: Rebuild and re-snapshot one repo
+name: ▶️ Rebuild and re-snapshot one repo
 
 # Fixes a single repo whose secure-docker-build failed (typically a transient
 # network flake) WITHOUT a manual per-repo commit, so each repo stays a clone of

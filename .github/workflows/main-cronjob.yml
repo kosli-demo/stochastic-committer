@@ -1,4 +1,4 @@
-name: Main cronjob stochastic committer
+name: 🚫 Main cronjob stochastic committer
 
 on:
   schedule:
