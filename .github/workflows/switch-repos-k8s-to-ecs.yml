@@ -1,7 +1,8 @@
 name: ▶️ Switch repos from k8s to ecs
 
-# One-off migration: move a hard-coded set of repos from the fake k8s environment
-# to the fake ecs environment. A clean switch is three ordered state changes:
+# One-off migration: move the first ECS_COUNT entries of all-repos.json from the
+# fake k8s environment to the fake ecs environment (the rest stay k8s). A clean
+# switch is three ordered state changes:
 #
 #   1. flip-base-data : rewrite each repo's block in base/data/all-repos.json from
 #      k8s to ecs and commit it, so every FUTURE stochastic run routes the repo
@@ -22,7 +23,9 @@ on:
 
 env:
   KOSLI_ORG: ${{ vars.KOSLI_ORG }}
-  REPOS_TO_SWITCH: "listed-derivative"
+  # Number of leading all-repos.json entries to place on the fake ecs env; the
+  # rest stay k8s.
+  ECS_COUNT: 87
   SCOPE: prod
   KOSLI_API_TOKEN_STAGING: ${{ secrets.KOSLI_API_TOKEN_STAGING }}
   KOSLI_API_TOKEN_PROD: ${{ secrets.KOSLI_API_TOKEN_PROD }}
@@ -51,16 +54,19 @@ jobs:
           token: ${{ secrets.CLONE_PUSH_REPOS }}
           path: base
 
-      - name: Switch the named repos to ecs in base all-repos.json
+      - name: Switch the first ECS_COUNT entries to ecs in base all-repos.json
         id: flip
         run: |
           set -Eeuo pipefail
-          python3 bin/switch_repos_to_ecs.py base/data/all-repos.json ${REPOS_TO_SWITCH}
 
-          # Hand the switched entries (now carrying ecs blocks) to the ecs seed job.
-          SWITCHED="$(jq --compact-output --arg repos "${REPOS_TO_SWITCH}" \
-            '($repos / " ") as $r | [ .[] | select(.repo_name as $n | $r | index($n)) ]' \
-            base/data/all-repos.json)"
+          # Names are read from the file itself, so they always exist in the fleet;
+          # switch_repos_to_ecs.py is idempotent on any entry that is already ecs.
+          mapfile -t NAMES < <(jq -r ".[:${ECS_COUNT}][].repo_name" base/data/all-repos.json)
+          python3 bin/switch_repos_to_ecs.py base/data/all-repos.json "${NAMES[@]}"
+
+          # Hand the switched entries (the first ECS_COUNT, now carrying ecs blocks)
+          # to the ecs seed job.
+          SWITCHED="$(jq --compact-output ".[:${ECS_COUNT}]" base/data/all-repos.json)"
           echo "switched_repos=${SWITCHED}" >> ${GITHUB_OUTPUT}
 
       - name: Commit and push base
@@ -70,7 +76,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "No change (repos already ecs); nothing to commit."
           else
-            git commit --message "Switch ${REPOS_TO_SWITCH} from k8s to ecs"
+            git commit --message "Switch first ${ECS_COUNT} repos from k8s to ecs"
             git push
           fi
 
@@ -87,13 +93,15 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Drop the switched repos from staging-k8s
+        env:
+          SWITCHED_REPOS: ${{ needs.flip-base-data.outputs.switched_repos }}
         run: |
           set -Eeuo pipefail
           ENV="staging-k8s"
 
-          # One --drop per repo (k8s_build_snapshot --drop is repeatable).
+          # One --drop per switched repo (k8s_build_snapshot --drop is repeatable).
           DROPS=""
-          for repo in ${REPOS_TO_SWITCH}; do
+          for repo in $(jq -r '.[].repo_name' <<< "${SWITCHED_REPOS}"); do
             DROPS="${DROPS} --drop ${repo}"
           done
 
@@ -132,7 +140,7 @@ jobs:
               --header "Content-Type: application/json" \
               --data @report.json \
               "${host}/api/v2/environments/${KOSLI_ORG}/${ENV}/report/K8S"
-            echo "dropped [${REPOS_TO_SWITCH}] from ${ENV} on ${host}"
+            echo "dropped ${ECS_COUNT} repos from ${ENV} on ${host}"
           done
 
 
