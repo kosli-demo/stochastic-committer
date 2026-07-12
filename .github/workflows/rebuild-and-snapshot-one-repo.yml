@@ -5,12 +5,17 @@ name: ▶️ Rebuild and re-snapshot one repo
 # base. It commits base's current tree over the repo (new git sha -> new image
 # tag, which sidesteps the registry's immutable tags), triggers the repo's CI to
 # rebuild and re-attest the real image digest to Kosli, waits for that CI, then
-# reports a fresh staging-k8s snapshot carrying the repo's new digest so it goes
-# compliant.
+# reports a fresh snapshot carrying the repo's new digest so it goes compliant.
+#
+# The repo is deployed to either the fake staging-k8s or the fake staging-ecs
+# environment, recorded by which block (k8s or ecs) its all-repos.json entry
+# carries. select-one partitions the single entry by that block and hands it to
+# the matching reusable snapshot workflow (snapshot-k8s.yml or snapshot-ecs.yml);
+# the sibling snapshot job is skipped because its partition is empty.
 #
 # This is stochastic-committer.yml reduced to a single, explicitly-named repo:
-# it reuses the same commit-to-repo-and-trigger-ci.yml and snapshot-k8s.yml.
-# Reports to prod (app.kosli.com), the host the cron reports staging-k8s to.
+# it reuses the same commit-to-repo-and-trigger-ci.yml and snapshot workflows.
+# Reports to prod (app.kosli.com), the host the cron reports staging to.
 
 on:
   workflow_dispatch:
@@ -21,13 +26,15 @@ on:
         required: true
 
 jobs:
-  # Turn the repo name into the one-element selected_repos list the downstream
-  # reusable workflows expect. snapshot-k8s.yml reads each entry's k8s block and
-  # env field, so it must be handed the whole all-repos.json entry, not a name.
+  # Turn the repo name into the one-element selected list the downstream reusable
+  # snapshot workflows expect, partitioned by deploy target. Each snapshot workflow
+  # reads each entry's env field and its k8s/ecs block, so it must be handed the
+  # whole all-repos.json entry (not a name) and only its own env's repos.
   select-one:
     runs-on: ubuntu-latest
     outputs:
-      selected_repos: ${{ steps.pick.outputs.selected_repos }}
+      selected_k8s_repos: ${{ steps.pick.outputs.selected_k8s_repos }}
+      selected_ecs_repos: ${{ steps.pick.outputs.selected_ecs_repos }}
       exists: ${{ steps.pick.outputs.exists }}
     env:
       REPO_NAME: ${{ inputs.repo_name }}
@@ -59,8 +66,14 @@ jobs:
             exit 1
           fi
 
-          SELECTED="$(jq --compact-output --null-input --argjson e "${ENTRY}" '[ $e ]')"
-          echo "selected_repos=${SELECTED}" >> "${GITHUB_OUTPUT}"
+          # Partition the single entry by deploy target so each snapshot workflow
+          # receives only its own env's repo: snapshot-k8s the k8s one, snapshot-ecs
+          # the ecs one. Exactly one block is present, so the other list is empty
+          # and its snapshot job is skipped.
+          K8S_SELECTED="$(jq --compact-output 'if .k8s then [ . ] else [] end' <<< "${ENTRY}")"
+          ECS_SELECTED="$(jq --compact-output 'if .ecs then [ . ] else [] end' <<< "${ENTRY}")"
+          echo "selected_k8s_repos=${K8S_SELECTED}" >> "${GITHUB_OUTPUT}"
+          echo "selected_ecs_repos=${ECS_SELECTED}" >> "${GITHUB_OUTPUT}"
           echo "exists=${EXISTS}" >> "${GITHUB_OUTPUT}"
 
   # Lay base's current tree over the repo + bump datetime.txt (new sha -> new
@@ -123,14 +136,28 @@ jobs:
             sleep 20
           done
 
-  # Report a fresh staging-k8s snapshot carrying the repo's real new digest
-  # (fetched from its Kosli flow), reconciled against the current snapshot.
-  snapshot:
+  # Report a fresh snapshot carrying the repo's real new digest (fetched from its
+  # Kosli flow), reconciled against the env's current snapshot. The repo lives on
+  # exactly one env, so exactly one of these two jobs has a non-empty partition and
+  # runs; the sibling is skipped by its guard.
+  snapshot-k8s:
     needs: [select-one, await-ci]
+    if: ${{ needs.select-one.outputs.selected_k8s_repos != '[]' }}
     uses: ./.github/workflows/snapshot-k8s.yml
     with:
       scope: prod
-      selected_repos: ${{ needs.select-one.outputs.selected_repos }}
+      selected_repos: ${{ needs.select-one.outputs.selected_k8s_repos }}
+    secrets:
+      KOSLI_API_TOKEN_STAGING: ${{ secrets.KOSLI_API_TOKEN_STAGING }}
+      KOSLI_API_TOKEN_PROD: ${{ secrets.KOSLI_API_TOKEN_PROD }}
+
+  snapshot-ecs:
+    needs: [select-one, await-ci]
+    if: ${{ needs.select-one.outputs.selected_ecs_repos != '[]' }}
+    uses: ./.github/workflows/snapshot-ecs.yml
+    with:
+      scope: prod
+      selected_repos: ${{ needs.select-one.outputs.selected_ecs_repos }}
     secrets:
       KOSLI_API_TOKEN_STAGING: ${{ secrets.KOSLI_API_TOKEN_STAGING }}
       KOSLI_API_TOKEN_PROD: ${{ secrets.KOSLI_API_TOKEN_PROD }}
